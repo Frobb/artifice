@@ -1,0 +1,16 @@
+{application, artifice,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  sasl,
+                  cowboy,
+                  jsx,
+                  lager
+                 ]},
+  {mod, { artifice_app, []}},
+  {env, []}
+ ]}.
