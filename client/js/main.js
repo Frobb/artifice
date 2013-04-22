@@ -128,8 +128,8 @@ gamejs.ready(function() {
     });
 
     function drawDebug() {
-        var gridX = Math.floor(Math.round(camera.x) / 128);
-        var gridY = Math.floor(Math.round(camera.y) / 128);
+        var gridX = Math.floor(camera.x / 128);
+        var gridY = Math.floor(camera.y / 128);
         $('#debug').text(
                 'world: (' + camera.x.toFixed(2) + "," + camera.y.toFixed(2) + ')' +
                 ' chunk: (' + gridX + ',' + gridY + ')');
