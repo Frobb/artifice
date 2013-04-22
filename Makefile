@@ -14,4 +14,10 @@ rel: compile
 clean:
 	$(REBAR) clean
 
-.PHONY: all compile deps rel clean
+doc:
+	$(REBAR) skip_deps=true doc
+
+test:
+	$(REBAR) skip_deps=true eunit
+
+.PHONY: all compile deps rel clean doc test
