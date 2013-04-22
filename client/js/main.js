@@ -120,8 +120,8 @@ gamejs.ready(function() {
         // TODO: Ignore off-screen creatures!
         for (var cid in creatures) {
             var c = creatures[cid];
-            var rect = new gamejs.Rect((c.pos.x-Math.floor(camera.x))*TILE_SIZE,
-                                       (c.pos.y-Math.floor(camera.y))*TILE_SIZE,
+            var rect = new gamejs.Rect((c.pos.x-camera.x)*TILE_SIZE,
+                                       (c.pos.y-camera.y)*TILE_SIZE,
                                        TILE_SIZE, TILE_SIZE);
             gamejs.draw.rect(display, "rgb(255,0,0)", rect);                                       
         }
