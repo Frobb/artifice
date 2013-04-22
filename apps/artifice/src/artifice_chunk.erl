@@ -1,6 +1,8 @@
 -module(artifice_chunk).
 -behaviour(gen_server).
 
+-include("event.hrl").
+
 %%% API
 -export([start_link/1]).
 -export([ensure_started/1]).
@@ -13,7 +15,7 @@
 -export([subscribe/1]).
 -export([unsubscribe/1]).
 
--export([gridref_of/2]).
+-export([gridref_of/1]).
 -export([adjacent_gridrefs/1]).
 
 %%% gen_server callbacks
@@ -37,8 +39,8 @@
          }).
 
 -record(state, {
-          subs :: list(),
-          creatures :: list(),
+          subs = [] :: list(),
+          creatures = [] :: list(),
           gridref
          }).
 
@@ -54,12 +56,9 @@ start_link(GridRef) ->
 
 %% Starts the chunk server for the given grid ref, if necessary.
 ensure_started(GridRef) ->
-    case is_started(GridRef) of
-        true ->
-            ok;
-        false ->
-            {ok, _Pid} = artifice_chunk_sup:start_child(child_spec(GridRef)),
-            ok
+    case artifice_chunk_sup:start_child(child_spec(GridRef)) of
+        {ok, _Pid} -> ok;
+        {error, {already_started, _Pid}} -> ok
     end.
 
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
@@ -109,7 +108,7 @@ unsubscribe(GridRef) ->
     gen_server:cast(registered_name(GridRef), {unsubscribe, self()}).
 
 %% @doc Get the chunk grid reference for a coordinate pair (x,y).
-gridref_of(X, Y) ->
+gridref_of({X,Y}) ->
     {X div ?CHUNK_WIDTH, Y div ?CHUNK_HEIGHT}.
 
 %% @doc Get a list of adjacent grid references.
@@ -158,30 +157,35 @@ handle_cast({subscribe, Pid}, #state{gridref=GridRef, subs=Subs0}=State) ->
     Sub = {Pid, #sub{pid=Pid, ref=Ref}},
     Subs1 = [Sub|Subs0],
     {noreply, State#state{subs=Subs1}};
+
 handle_cast({unsubscribe, Pid}, #state{gridref=GridRef, subs=Subs0}=State) ->
     lager:debug("Process ~p unsubscribed from chunk ~p.", [Pid, GridRef]),
     {Pid, #sub{ref=Ref}} = lists:keyfind(Pid, 1, Subs0),
     erlang:demonitor(Ref),
     Subs1 = lists:keydelete(Pid, 1, Subs0),
     {noreply, State#state{subs=Subs1}};
+
 handle_cast({publish, Event}, #state{subs=Subs}=State) ->
-    lists:foreach(
-      fun({Pid, _}) ->
-              Pid ! {event, Event}
-      end,
-      Subs),
+    do_publish(Event, Subs),
     {noreply, State};
-handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures}=State) ->
+
+handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures, subs=Subs}=State) ->
+    do_publish(#evt_creature_add{cid=Cid, pos=Pos}, Subs),
     Creature = #creature{cid=Cid, pos=Pos},
     {noreply, State#state{creatures=[{Cid, Creature}|Creatures]}};
-handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0}=State) ->
+
+handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs}=State) ->
+    do_publish(#evt_creature_move{cid=Cid, pos=Pos}, Subs),
     {_, Creature0} = lists:keyfind(Cid, 1, Creatures0),
     Creature1 = Creature0#creature{pos=Pos},
     Creatures1 = lists:keyreplace(Cid, 1, Creatures0, {Cid, Creature1}),
     {noreply, State#state{creatures=Creatures1}};
-handle_cast({remove_creature, Cid}, #state{creatures=Creatures0}=State) ->
+
+handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs}=State) ->
+    do_publish(#evt_creature_remove{cid=Cid}, Subs),
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
     {noreply, State#state{creatures=Creatures1}};
+
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -193,3 +197,14 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%%% Internal -------------------------------------------------------------------
+
+%% @doc Publish an event to all the chunk's subscribers.
+%% @private
+do_publish(Event, Subs) ->
+    lists:foreach(
+      fun({Pid, _}) ->
+              Pid ! {event, Event}
+      end,
+      Subs).

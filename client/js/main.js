@@ -1,11 +1,39 @@
+var gamejs = require('gamejs');
+
+var creature = require('./creature');
+
 // Message handlers and senders ------------------------------------------------
 
 var handlers = {};
 
 handlers["log"] = function() { /* suppress */ };
+handlers["creature_add"] = handleCreatureAdd;
+handlers["creature_move"] = handleCreatureMove;
+handlers["creature_remove"] = handleCreatureRemove;
+
+function handleCreatureAdd(payload) {
+    var c = new creature.Creature(payload.cid, payload.pos);
+    creatures[c.cid] = c;    
+}
+
+function handleCreatureMove(payload) {
+    if (payload.cid in creatures) {
+        creatures[payload.cid].pos = payload.pos;
+    } else {
+        handleCreatureAdd(payload);
+    }
+}
+
+function handleCreatureRemove(payload) {
+    delete creatures[payload.cid];
+}
 
 function sendMove(x, y) {
     sendMsg('move', { 'x': x, 'y': y });
+}
+
+function sendCreatureAdd(x, y) {
+    sendMsg('creature_add', {'x': x, 'y': y });
 }
 
 function sendMsg(type, payload) {
@@ -36,13 +64,13 @@ socket.onmessage = function(evt) {
 
 var MAP_WIDTH = 640;
 var MAP_HEIGHT = 480;
+var TILE_SIZE = 32; //px
 
+var creatures = {};
 var camera = { x: 0, y: 0 };
 var moveState = { up: 0, left: 0, down: 0, right: 0 };
 var moveSpeed = 5.0;
 var moveMult = 1.0;
-
-var gamejs = require('gamejs');
 
 gamejs.preload(['../sprites/grass.png']);
 
@@ -61,6 +89,11 @@ gamejs.ready(function() {
             else if (event.key === gamejs.event.K_SHIFT) {
                 moveMult = event.type === gamejs.event.KEY_DOWN ? 10.0 : 1.0;
             }
+        } else if (event.type === gamejs.event.MOUSE_UP) {
+            var cellX = Math.floor(camera.x + event.pos[0] / TILE_SIZE);
+            var cellY = Math.floor(camera.y + event.pos[1] / TILE_SIZE);
+            console.log(cellX);
+            sendCreatureAdd(cellX, cellY);
         }
     });
 
@@ -75,19 +108,30 @@ gamejs.ready(function() {
 
         var xfrac = Math.floor(camera.x) - camera.x;
         var yfrac = Math.floor(camera.y) - camera.y;
-        for (var x = -1; x <= MAP_WIDTH/32; x++) {
-            for (var y = -1; y <= MAP_HEIGHT/32; y++) {
-                var r = new gamejs.Rect((x+xfrac)*32, (y+yfrac)*32, 32, 32);
+        for (var x = -1; x <= MAP_WIDTH/TILE_SIZE; x++) {
+            for (var y = -1; y <= MAP_HEIGHT/TILE_SIZE; y++) {
+                var r = new gamejs.Rect((x+xfrac)*TILE_SIZE, (y+yfrac)*TILE_SIZE,
+                                        TILE_SIZE, TILE_SIZE);
                 display.blit(grass, r);
             }
+        }
+
+        // Draw all creatures
+        // TODO: Ignore off-screen creatures!
+        for (var cid in creatures) {
+            var c = creatures[cid];
+            var rect = new gamejs.Rect((c.pos.x-Math.floor(camera.x))*TILE_SIZE,
+                                       (c.pos.y-Math.floor(camera.y))*TILE_SIZE,
+                                       TILE_SIZE, TILE_SIZE);
+            gamejs.draw.rect(display, "rgb(255,0,0)", rect);                                       
         }
     });
 
     function drawDebug() {
-        var gridX = Math.floor(Math.floor(camera.x) / 128);
-        var gridY = Math.floor(Math.floor(camera.y) / 128);
+        var gridX = Math.floor(Math.round(camera.x) / 128);
+        var gridY = Math.floor(Math.round(camera.y) / 128);
         $('#debug').text(
-            'world: (' + camera.x.toFixed(2) + "," + camera.y.toFixed(2) + ')' +
+                'world: (' + camera.x.toFixed(2) + "," + camera.y.toFixed(2) + ')' +
                 ' chunk: (' + gridX + ',' + gridY + ')');
     }
 });

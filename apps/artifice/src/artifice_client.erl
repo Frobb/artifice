@@ -8,6 +8,8 @@
 -export([websocket_info/3]).
 -export([websocket_terminate/3]).
 
+-include("event.hrl").
+
 -record(state, {
           x :: integer(), y :: integer()
          }).
@@ -29,8 +31,9 @@ websocket_handle({text, Msg}, Req, State0) ->
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
  
-websocket_info(hai, Req, State) ->
-    {reply, {text, encode_message(<<"log">>, [{<<"text">>, <<"hello">>}])}, Req, State};
+websocket_info({event, Event}, Req, State) ->
+    JSON = encode_event(Event),
+    {reply, {text, JSON}, Req, State};
 websocket_info(_Info, Req, State) ->
     {ok, Req, State}.
  
@@ -43,15 +46,21 @@ handle(<<"move">>, Payload, State) ->
     {_, X} = lists:keyfind(<<"x">>, 1, Payload),
     {_, Y} = lists:keyfind(<<"y">>, 1, Payload),
     update_subscriptions({State#state.x, State#state.y}, {X, Y}),
-    {ok, State#state{x=X, y=Y}}.
+    {ok, State#state{x=X, y=Y}};
+
+handle(<<"creature_add">>, Payload, State) ->
+    {_, X} = lists:keyfind(<<"x">>, 1, Payload),
+    {_, Y} = lists:keyfind(<<"y">>, 1, Payload),
+    artifice_creature:start_supervised(artifice_creature:new_cid(), {X,Y}),
+    {ok, State}.
 
 %%% Internal -------------------------------------------------------------------
 
 %% @doc Manipulate chunk subscriptions based on movement.
 %% @private
 update_subscriptions({OldX, OldY}, {NewX, NewY}) ->
-    OldGrid = artifice_chunk:gridref_of(OldX, OldY),
-    NewGrid = artifice_chunk:gridref_of(NewX, NewY),
+    OldGrid = artifice_chunk:gridref_of({OldX, OldY}),
+    NewGrid = artifice_chunk:gridref_of({NewX, NewY}),
     OldAdj = gb_sets:from_list(artifice_chunk:adjacent_gridrefs(OldGrid)),
     NewAdj = gb_sets:from_list(artifice_chunk:adjacent_gridrefs(NewGrid)),
     ToSub = gb_sets:to_list(gb_sets:difference(NewAdj, OldAdj)),
@@ -62,9 +71,22 @@ update_subscriptions({OldX, OldY}, {NewX, NewY}) ->
 %% @doc Sets up initial chunk descriptions.
 %% @private
 subscribe_initial(X, Y) ->
-    GridRef = artifice_chunk:gridref_of(X, Y),
+    GridRef = artifice_chunk:gridref_of({X, Y}),
     lists:foreach(fun artifice_chunk:subscribe/1,
                   artifice_chunk:adjacent_gridrefs(GridRef)).
+
+%% @doc Encode an event to a JSON binary.
+%% @private
+encode_event(#evt_creature_add{cid=Cid, pos={X,Y}}) ->
+    encode_message(<<"creature_add">>,
+                   [{<<"cid">>, Cid},
+                    {<<"pos">>, [{<<"x">>, X}, {<<"y">>, Y}]}]);
+encode_event(#evt_creature_move{cid=Cid, pos={X,Y}}) ->
+    encode_message(<<"creature_move">>,
+                   [{<<"cid">>, Cid},
+                    {<<"pos">>, [{<<"x">>, X}, {<<"y">>, Y}]}]);
+encode_event(#evt_creature_remove{cid=Cid}) ->
+    encode_message(<<"creature_remove">>, [{<<"cid">>, Cid}]).
 
 %% @doc Encode a message to a JSON binary.
 %% @private

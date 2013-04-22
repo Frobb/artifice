@@ -17,8 +17,8 @@ start_link() ->
 
 init([]) ->
     ChunkSup = supervisor_child_spec(artifice_chunk_sup),
-    {ok, { {one_for_one, 5, 10}, [ChunkSup]} }.
-
+    CreatureSup = supervisor_child_spec(artifice_creature_sup),
+    {ok, { {one_for_one, 5, 10}, [ChunkSup, CreatureSup]} }.
 
 %% @doc Generate a child spec for a supervisor-type child.
 %% @private
