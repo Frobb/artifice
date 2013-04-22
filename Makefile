@@ -8,7 +8,10 @@ compile: deps
 deps:
 	$(REBAR) get-deps
 
+rel: compile
+	$(REBAR) generate
+
 clean:
 	$(REBAR) clean
 
-.PHONY: all compile clean
+.PHONY: all compile deps rel clean

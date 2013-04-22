@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PORT=8080
+PORT=1234
 if [ ! -z "$1" ]; then
 	PORT="$1"
 fi	
