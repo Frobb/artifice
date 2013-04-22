@@ -87,7 +87,7 @@ reset_timer() ->
 think(#state{pos={X,Y}}=State) ->
     DeltaX = random:uniform(3)-2, %% -1..1
     DeltaY = random:uniform(3)-2, %% -1..1
-    move({X+DeltaX, Y+DeltaY}, State).    
+    move({X+DeltaX, Y+DeltaY}, State).
 
 %% @doc Add ourselves to the chunk we spawned in.
 %% @private
@@ -103,10 +103,10 @@ move(NewPos, State) ->
     NewGrid = artifice_chunk:gridref_of(NewPos),
     OldGrid = artifice_chunk:gridref_of(OldPos),
     case NewGrid == OldGrid of
-        true ->
+        false ->
             artifice_chunk:remove_creature(OldGrid, Cid),
             artifice_chunk:add_creature(NewGrid, Cid, NewPos);            
-        false ->
+        true ->
             artifice_chunk:move_creature(NewGrid, Cid, NewPos)
     end,
     State#state{pos=NewPos}.
