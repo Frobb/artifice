@@ -15,8 +15,8 @@
 -export([subscribe/1]).
 -export([unsubscribe/1]).
 
--export([gridref_of/1]).
--export([adjacent_gridrefs/1]).
+-export([chunk_at/1]).
+-export([adjacent_chunks/1]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -41,7 +41,7 @@
 -record(state, {
           subs = [] :: list(),
           creatures = [] :: list(),
-          gridref
+          chunk
          }).
 
 -define(CHUNK_WIDTH, 128).
@@ -49,30 +49,30 @@
 
 %%% API ------------------------------------------------------------------------
 
-%% @doc Start a chunk server for the given grid reference.
-start_link(GridRef) ->
-    Name = registered_name(GridRef),
-    gen_server:start_link({local, Name}, ?MODULE, [GridRef], []).
+%% @doc Start a chunk server for the given chunk reference.
+start_link(Chunk) ->
+    Name = registered_name(Chunk),
+    gen_server:start_link({local, Name}, ?MODULE, [Chunk], []).
 
-%% Starts the chunk server for the given grid ref, if necessary.
-ensure_started(GridRef) ->
-    case artifice_chunk_sup:start_child(child_spec(GridRef)) of
+%% Starts the chunk server for the given chunk ref, if necessary.
+ensure_started(Chunk) ->
+    case artifice_chunk_sup:start_child(child_spec(Chunk)) of
         {ok, _Pid} -> ok;
         {error, {already_started, _Pid}} -> ok
     end.
 
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
 %% @private
-child_spec(GridRef) ->
-    Name = registered_name(GridRef),
-    StartFunc = {?MODULE, start_link, [GridRef]},
+child_spec(Chunk) ->
+    Name = registered_name(Chunk),
+    StartFunc = {?MODULE, start_link, [Chunk]},
     Restart = permanent,
     Shutdown = brutal_kill,
     Type = worker,
     Modules = [?MODULE],
     {Name, StartFunc, Restart, Shutdown, Type, Modules}.
 
-%% @doc Get the name with which the chunk server for a given grid ref registers.
+%% @doc Get the name with which the chunk server for a given chunk ref registers.
 %% @private
 registered_name({X, Y}) ->
     list_to_atom(
@@ -81,10 +81,10 @@ registered_name({X, Y}) ->
        )
      ).
 
-%% @doc True if the chunk server handling the given grid ref is alive.
+%% @doc True if the chunk server handling the given chunk ref is alive.
 %% @private
-is_started(GridRef) ->
-    Name = registered_name(GridRef),
+is_started(Chunk) ->
+    Name = registered_name(Chunk),
     case catch sys:get_status(Name) of
         {status, _Pid, _Mod, _Status} ->
             true;
@@ -93,26 +93,26 @@ is_started(GridRef) ->
     end.
 
 %% @doc Publish an event to all subscribers.
-publish(GridRef, Event) ->
-    ok = ensure_started(GridRef),
-    gen_server:cast(registered_name(GridRef), {publish, Event}).
+publish(Chunk, Event) ->
+    ok = ensure_started(Chunk),
+    gen_server:cast(registered_name(Chunk), {publish, Event}).
 
 %% @doc Subscribe the current process to events from a chunk.
-subscribe(GridRef) ->
-    ok = ensure_started(GridRef),
-    gen_server:cast(registered_name(GridRef), {subscribe, self()}).
+subscribe(Chunk) ->
+    ok = ensure_started(Chunk),
+    gen_server:cast(registered_name(Chunk), {subscribe, self()}).
 
 %% @doc Unsubscribe the current process from events from a chunk.
-unsubscribe(GridRef) ->
-    ok = ensure_started(GridRef),
-    gen_server:cast(registered_name(GridRef), {unsubscribe, self()}).
+unsubscribe(Chunk) ->
+    ok = ensure_started(Chunk),
+    gen_server:cast(registered_name(Chunk), {unsubscribe, self()}).
 
-%% @doc Get the chunk grid reference for a coordinate pair (x,y).
-gridref_of({X,Y}) ->
+%% @doc Get the chunk reference for a coordinate pair (x,y).
+chunk_at({X,Y}) ->
     {X div ?CHUNK_WIDTH, Y div ?CHUNK_HEIGHT}.
 
-%% @doc Get a list of adjacent grid references.
-adjacent_gridrefs({X, Y}) ->
+%% @doc Get a list of adjacent chunk references.
+adjacent_chunks({X, Y}) ->
     [{X, Y},      % Center
      {X, Y+1},    % N
      {X-1, Y+1},  % NW
@@ -124,42 +124,42 @@ adjacent_gridrefs({X, Y}) ->
      {X+1, Y+1}]. % NE
 
 %% @doc Add a creature to the given chunk.
-add_creature(GridRef, Cid, Pos) ->
-    ok = ensure_started(GridRef),
-    Name = registered_name(GridRef),
+add_creature(Chunk, Cid, Pos) ->
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
     gen_server:cast(Name, {add_creature, Cid, Pos}).
 
 %% @doc Move a creature within the given chunk.
-move_creature(GridRef, Cid, Pos) ->
-    ok = ensure_started(GridRef),
-    Name = registered_name(GridRef),
+move_creature(Chunk, Cid, Pos) ->
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
     gen_server:cast(Name, {move_creature, Cid, Pos}).
 
 %% @doc Remove a creature from the given chunk.
-remove_creature(GridRef, Cid) ->
-    ok = ensure_started(GridRef),
-    Name = registered_name(GridRef),
+remove_creature(Chunk, Cid) ->
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
     gen_server:cast(Name, {remove_creature, Cid}).
 
 %%% gen_server callbacks -------------------------------------------------------
 
-init([{X,Y}=GridRef]) ->
+init([{X,Y}=Chunk]) ->
     lager:info("Chunk (~w,~w) online.", [X, Y]),
-    State = #state{gridref=GridRef},
+    State = #state{chunk=Chunk},
     {ok, State}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast({subscribe, Pid}, #state{gridref=GridRef, subs=Subs0}=State) ->
-    lager:debug("Process ~p subscribed to chunk ~p.", [Pid, GridRef]),
+handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
+    lager:debug("Process ~p subscribed to chunk ~p.", [Pid, Chunk]),
     Ref = erlang:monitor(process, Pid),
     Sub = {Pid, #sub{pid=Pid, ref=Ref}},
     Subs1 = [Sub|Subs0],
     {noreply, State#state{subs=Subs1}};
 
-handle_cast({unsubscribe, Pid}, #state{gridref=GridRef, subs=Subs0}=State) ->
-    lager:debug("Process ~p unsubscribed from chunk ~p.", [Pid, GridRef]),
+handle_cast({unsubscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
+    lager:debug("Process ~p unsubscribed from chunk ~p.", [Pid, Chunk]),
     {Pid, #sub{ref=Ref}} = lists:keyfind(Pid, 1, Subs0),
     erlang:demonitor(Ref),
     Subs1 = lists:keydelete(Pid, 1, Subs0),
