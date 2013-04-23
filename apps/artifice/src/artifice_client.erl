@@ -59,10 +59,10 @@ handle(<<"creature_add">>, Payload, State) ->
 %% @doc Manipulate chunk subscriptions based on movement.
 %% @private
 update_subscriptions({OldX, OldY}, {NewX, NewY}) ->
-    OldGrid = artifice_chunk:gridref_of({OldX, OldY}),
-    NewGrid = artifice_chunk:gridref_of({NewX, NewY}),
-    OldAdj = gb_sets:from_list(artifice_chunk:adjacent_gridrefs(OldGrid)),
-    NewAdj = gb_sets:from_list(artifice_chunk:adjacent_gridrefs(NewGrid)),
+    OldChunk = artifice_chunk:chunk_at({OldX, OldY}),
+    NewChunk = artifice_chunk:chunk_at({NewX, NewY}),
+    OldAdj = gb_sets:from_list(artifice_chunk:adjacent_chunks(OldChunk)),
+    NewAdj = gb_sets:from_list(artifice_chunk:adjacent_chunks(NewChunk)),
     ToSub = gb_sets:to_list(gb_sets:difference(NewAdj, OldAdj)),
     ToUnsub = gb_sets:to_list(gb_sets:difference(OldAdj, NewAdj)),
     lists:foreach(fun artifice_chunk:subscribe/1, ToSub),
@@ -71,9 +71,9 @@ update_subscriptions({OldX, OldY}, {NewX, NewY}) ->
 %% @doc Sets up initial chunk descriptions.
 %% @private
 subscribe_initial(X, Y) ->
-    GridRef = artifice_chunk:gridref_of({X, Y}),
+    Chunk = artifice_chunk:chunk_at({X, Y}),
     lists:foreach(fun artifice_chunk:subscribe/1,
-                  artifice_chunk:adjacent_gridrefs(GridRef)).
+                  artifice_chunk:adjacent_chunks(Chunk)).
 
 %% @doc Encode an event to a JSON binary.
 %% @private
