@@ -11,7 +11,13 @@
 
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
-        {'_', [{'_', artifice_client, []}]}
+        {'_', [
+               {"/", artifice_client, []},
+               {"/[...]", cowboy_static, [
+                   {directory, {priv_dir, artifice, [<<"static">>]}},
+                   {mimetypes, {fun mimetypes:path_to_mimes/2, default}}
+               ]}
+        ]}
     ]),
     %% Name, NbAcceptors, TransOpts, ProtoOpts
     {ok, _Pid} = cowboy:start_http(
