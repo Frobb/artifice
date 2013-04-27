@@ -3,6 +3,10 @@
 
 -include("event.hrl").
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 %%% API
 -export([start_link/1]).
 -export([ensure_started/1]).
@@ -57,9 +61,15 @@ start_link(Chunk) ->
 
 %% Starts the chunk server for the given chunk ref, if necessary.
 ensure_started(Chunk) ->
-    case artifice_chunk_sup:start_child(child_spec(Chunk)) of
-        {ok, _Pid} -> ok;
-        {error, {already_started, _Pid}} -> ok
+    Name = registered_name(Chunk),
+    case lists:member(Name, registered()) of
+        true ->
+            ok;
+        false ->
+            case artifice_chunk_sup:start_child(child_spec(Chunk)) of
+                {ok, _Pid} -> ok;
+                {error, {already_started, _Pid}} -> ok
+            end
     end.
 
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
@@ -99,19 +109,19 @@ unsubscribe(Chunk) ->
 
 %% @doc Get the chunk reference for a coordinate pair (x,y).
 chunk_at({X,Y}) ->
-    {X div ?CHUNK_WIDTH, Y div ?CHUNK_HEIGHT}.
+    {floor(X / ?CHUNK_WIDTH), floor(Y / ?CHUNK_HEIGHT)}.
 
 %% @doc Get a list of adjacent chunk references.
 adjacent_chunks({X, Y}) ->
     [{X, Y},      % Center
-     {X, Y+1},    % N
-     {X-1, Y+1},  % NW
+     {X, Y-1},    % N
+     {X-1, Y-1},  % NW
      {X-1, Y},    % W
-     {X-1, Y-1},  % SW
-     {X, Y-1},    % S
-     {X+1, Y-1},  % SE
+     {X-1, Y+1},  % SW
+     {X, Y+1},    % S
+     {X+1, Y+1},  % SE
      {X+1, Y},    % E
-     {X+1, Y+1}]. % NE
+     {X+1, Y-1}]. % NE
 
 %% @doc Add a creature to the given chunk.
 add_creature(Chunk, Cid, Pos) ->
@@ -210,3 +220,41 @@ find_creature_by_pos([_Creature|Creatures], Pos) ->
     find_creature_by_pos(Creatures, Pos);
 find_creature_by_pos([], _Pos) -> 
     false.
+
+%% @doc Compute the floor of a number (think "Math.floor").
+%% @private
+%% Source: http://schemecookbook.org/Erlang/NumberRounding
+floor(X) ->
+    T = erlang:trunc(X),
+    case (X - T) of
+        Neg when Neg < 0 -> T - 1;
+        Pos when Pos > 0 -> T;
+        _ -> T
+    end.
+
+%%% Tests ----------------------------------------------------------------------
+
+-ifdef(TEST).
+
+child_spec_test() ->
+    ?assertEqual({artifice_chunk_0_0,
+                  {?MODULE, start_link, [{0,0}]},
+                  permanent, brutal_kill, worker, [?MODULE]},
+                 child_spec({0,0})).
+
+registered_name_test() ->
+    ?assertEqual('artifice_chunk_0_0', registered_name({0,0})),
+    ?assertEqual('artifice_chunk_0_-1', registered_name({0,-1})).
+
+do_publish_test() ->
+    do_publish(some_event, [{self(), #sub{pid=self()}}]),
+    receive X -> ?assertEqual({event, some_event}, X) end.
+
+find_creature_by_pos_test() ->
+    ?assertMatch({ok, _Pid}, start_link({0,0})),
+    Cid = <<"mycid1">>,
+    ?assertEqual(false, creature_at({0,0}, {0,0})),
+    add_creature({0,0}, Cid, {0,0}),
+    ?assertEqual({ok, Cid}, creature_at({0,0}, {0,0})).
+
+-endif.
