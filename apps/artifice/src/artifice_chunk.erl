@@ -10,6 +10,7 @@
 -export([add_creature/3]).
 -export([move_creature/3]).
 -export([remove_creature/2]).
+-export([creature_at/2]).
 
 -export([publish/2]).
 -export([subscribe/1]).
@@ -81,17 +82,6 @@ registered_name({X, Y}) ->
        )
      ).
 
-%% @doc True if the chunk server handling the given chunk ref is alive.
-%% @private
-is_started(Chunk) ->
-    Name = registered_name(Chunk),
-    case catch sys:get_status(Name) of
-        {status, _Pid, _Mod, _Status} ->
-            true;
-        {'EXIT', {noproc, _}} ->
-            false
-    end.
-
 %% @doc Publish an event to all subscribers.
 publish(Chunk, Event) ->
     ok = ensure_started(Chunk),
@@ -141,6 +131,12 @@ remove_creature(Chunk, Cid) ->
     Name = registered_name(Chunk),
     gen_server:cast(Name, {remove_creature, Cid}).
 
+%% @doc Get the id of the creature at the given position, or false.
+creature_at(Chunk, Pos) ->
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:call(Name, {creature_at, Pos}).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
@@ -148,8 +144,8 @@ init([{X,Y}=Chunk]) ->
     State = #state{chunk=Chunk},
     {ok, State}.
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call({creature_at, Pos}, _From, #state{creatures=Creatures}=State) ->
+    {reply, find_creature_by_pos(Creatures, Pos), State}.
 
 handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
     lager:debug("Process ~p subscribed to chunk ~p.", [Pid, Chunk]),
@@ -184,10 +180,7 @@ handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs}=S
 handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs}=State) ->
     do_publish(#evt_creature_remove{cid=Cid}, Subs),
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
-    {noreply, State#state{creatures=Creatures1}};
-
-handle_cast(_Request, State) ->
-    {noreply, State}.
+    {noreply, State#state{creatures=Creatures1}}.
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -208,3 +201,12 @@ do_publish(Event, Subs) ->
               Pid ! {event, Event}
       end,
       Subs).
+
+%% @doc Gets the id of the creature at the given position, or false.
+%% @private
+find_creature_by_pos([{Cid, #creature{pos=Pos}}|_Creatures], Pos) ->
+    {ok, Cid};
+find_creature_by_pos([_Creature|Creatures], Pos) -> 
+    find_creature_by_pos(Creatures, Pos);
+find_creature_by_pos([], _Pos) -> 
+    false.
