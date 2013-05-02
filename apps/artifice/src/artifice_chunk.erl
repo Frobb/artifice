@@ -19,6 +19,9 @@
 -export([publish/2]).
 -export([subscribe/1]).
 -export([unsubscribe/1]).
+-export([subscribe_initial/1]).
+-export([update_subscriptions/2]).
+-export([unsubscribe_final/1]).
 
 -export([chunk_at/1]).
 -export([adjacent_chunks/1]).
@@ -106,6 +109,25 @@ subscribe(Chunk) ->
 unsubscribe(Chunk) ->
     ok = ensure_started(Chunk),
     gen_server:cast(registered_name(Chunk), {unsubscribe, self()}).
+
+%% @doc Update subscriptions for the calling process based
+%% on the old and new coordinates. Should be called after
+%% moving yourself (creatures) or the camera (clients).
+update_subscriptions(OldPos, NewPos) ->
+    OldAdj = adjacent_chunks(chunk_at(OldPos)),
+    NewAdj = adjacent_chunks(chunk_at(NewPos)),
+    lists:foreach(fun artifice_chunk:subscribe/1,   NewAdj -- OldAdj),
+    lists:foreach(fun artifice_chunk:unsubscribe/1, OldAdj -- NewAdj).
+
+%% @doc Set up initial chunk subscriptions for the current process.
+%% Should be called by a creature or client upon startup.
+subscribe_initial(Pos) ->
+    lists:foreach(fun subscribe/1, adjacent_chunks(chunk_at(Pos))).
+
+%% @doc Unsubscribes the current process from all chunks in its vicinity.
+%% Should be called when a creature or client exits.
+unsubscribe_final(Pos) ->
+    lists:foreach(fun unsubscribe/1, adjacent_chunks(chunk_at(Pos))).
 
 %% @doc Get the chunk reference for a coordinate pair (x,y).
 chunk_at({X,Y}) ->

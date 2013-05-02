@@ -23,6 +23,8 @@
 -define(THINK_HZ, 1).
 -define(THINK_MESSAGE, think).
 
+-include("event.hrl").
+
 %%% API ------------------------------------------------------------------------
 
 %% @doc Start a new creature process.
@@ -64,16 +66,25 @@ handle_info(?THINK_MESSAGE, State0) ->
     State1 = think(State0),
     reset_timer(),
     {noreply, State1};
+handle_info({event, Event}, State) ->
+    handle_event(Event),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, #state{cid=Cid, pos=Pos}) ->
     Chunk = artifice_chunk:chunk_at(Pos),
     artifice_chunk:remove_creature(Chunk, Cid),
+    artifice_chunk:unsubscribe_final(Pos),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%%% Event handling -------------------------------------------------------------
+
+handle_event(_Event) ->
+    ok.
 
 %%% Internal -------------------------------------------------------------------
 
@@ -93,7 +104,9 @@ think(#state{pos={X,Y}}=State) ->
 %% @private
 add_to_initial_chunk(State) ->
     Chunk = artifice_chunk:chunk_at(State#state.pos),
-    artifice_chunk:add_creature(Chunk, State#state.cid, State#state.pos).
+    artifice_chunk:add_creature(Chunk, State#state.cid, State#state.pos),
+    artifice_chunk:subscribe_initial(State#state.pos),
+    ok.
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
 %% @private
@@ -109,4 +122,5 @@ move(NewPos, State) ->
         true ->
             artifice_chunk:move_creature(NewChunk, Cid, NewPos)
     end,
+    artifice_chunk:update_subscriptions(OldPos, NewPos),
     State#state{pos=NewPos}.
