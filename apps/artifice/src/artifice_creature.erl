@@ -6,6 +6,7 @@
 -export([start_supervised/2]).
 -export([child_spec/2]).
 -export([new_cid/0]).
+-export([move/2]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -16,12 +17,14 @@
 -export([code_change/3]).
 
 -record(state, {
-          cid :: binary(),
-          pos :: {integer(), integer()}
+          cid   :: binary(),
+          pos   :: {integer(), integer()},
+          brain :: artifice_brain:brain()
          }).
 
 -define(THINK_HZ, 1).
 -define(THINK_MESSAGE, think).
+-define(BRAIN, artifice_brain_dumb).
 
 -include("event.hrl").
 
@@ -48,10 +51,14 @@ child_spec(Cid, Pos) ->
 new_cid() ->
     base64:encode(crypto:rand_bytes(6)).
 
+%% @doc Move the creature in the specified direction.
+move(Pid, Dir) ->
+    gen_server:cast(Pid, {move, Dir}).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([Cid, Pos]) ->
-    State = #state{cid=Cid, pos=Pos},
+    State = #state{cid=Cid, pos=Pos, brain=?BRAIN:random()},
     add_to_initial_chunk(State),
     reset_timer(),
     {ok, State}.
@@ -59,13 +66,19 @@ init([Cid, Pos]) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast(_Request, State) ->
-    {noreply, State}.
+handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
+    State1 = case Dir of
+                 north -> actually_move({X, Y-1}, State0);
+                 south -> actually_move({X, Y+1}, State0);
+                 east  -> actually_move({X+1, Y}, State0);
+                 west  -> actually_move({X-1, Y}, State0)
+             end,
+    {noreply, State1}.
 
-handle_info(?THINK_MESSAGE, State0) ->
-    State1 = think(State0),
+handle_info(?THINK_MESSAGE, State) ->
+    ?BRAIN:react(State#state.brain, [{pid, self()}]),
     reset_timer(),
-    {noreply, State1};
+    {noreply, State};
 handle_info({event, Event}, State) ->
     handle_event(Event),
     {noreply, State};
@@ -93,13 +106,6 @@ reset_timer() ->
     {ok, _TRef} = timer:send_after(Time, ?THINK_MESSAGE),
     ok.
 
-%% @doc Take a random action.
-%% @private
-think(#state{pos={X,Y}}=State) ->
-    DeltaX = random:uniform(3)-2, %% -1..1
-    DeltaY = random:uniform(3)-2, %% -1..1
-    move({X+DeltaX, Y+DeltaY}, State).
-
 %% @doc Add ourselves to the chunk we spawned in.
 %% @private
 add_to_initial_chunk(State) ->
@@ -110,7 +116,7 @@ add_to_initial_chunk(State) ->
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
 %% @private
-move(NewPos, State) ->
+actually_move(NewPos, State) ->
     Cid = State#state.cid,
     OldPos = State#state.pos,
     NewChunk = artifice_chunk:chunk_at(NewPos),

@@ -2,7 +2,6 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-
 -define(CHUNK, {0, 0}).
 -define(CID, <<"mycid1">>).
 
@@ -55,8 +54,8 @@ main_test_() ->
                end},
 	      {"Getting the event log",
 	       fun() ->
-		       ?assertEqual(add_creature, hd(artifice_chunk:event_log(
-						      {0, 0}))
+		       ?assertEqual({evt_creature_add, <<"mycid1">>, {0, 0}}, hd(artifice_chunk:event_log(
+										  ?CHUNK))
 				   )
 	       end},
               {"Moving a creature updates cells",

@@ -54,9 +54,6 @@
           chunk
          }).
 
-
-
-
 -define(CHUNK_WIDTH, 128).
 -define(CHUNK_HEIGHT, 128).
 
@@ -174,8 +171,7 @@ creature_at(Chunk, Pos) ->
     Name = registered_name(Chunk),
     gen_server:call(Name, {creature_at, Pos}).
 
-event_log({X,Y}) ->
-    Chunk = chunk_at({X,Y}),
+event_log(Chunk) ->
     ok = ensure_started(Chunk),
     Name = registered_name(Chunk),
     gen_server:call(Name, event_log).
@@ -213,7 +209,8 @@ handle_cast({publish, Event}, #state{subs=Subs}=State) ->
 
 handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures, subs=Subs, log=Log}=State) ->
     do_publish(#evt_creature_add{cid=Cid, pos=Pos}, Subs),
-    Log1 = [add_creature | Log],
+    Event = #evt_creature_add{cid=Cid, pos=Pos},
+    Log1 = [Event | Log],
     Creature = #creature{cid=Cid, pos=Pos},
     {noreply, State#state{creatures=[{Cid, Creature}|Creatures], log=Log1}};
 
@@ -222,13 +219,15 @@ handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs, l
     {_, Creature0} = lists:keyfind(Cid, 1, Creatures0),
     Creature1 = Creature0#creature{pos=Pos},
     Creatures1 = lists:keyreplace(Cid, 1, Creatures0, {Cid, Creature1}),
-    Log1 = [move_creature | Log], 
+    Event = #evt_creature_move{cid=Cid, pos=Pos},
+    Log1 = [Event | Log], 
     {noreply, State#state{creatures=Creatures1, log=Log1}};
 
 handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs, log=Log}=State) ->
     do_publish(#evt_creature_remove{cid=Cid}, Subs),
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
-    Log1 = [remove_creature | Log],
+    Event = #evt_creature_remove{cid=Cid},
+    Log1 = [Event | Log],
     {noreply, State#state{creatures=Creatures1, log=Log1}}.
 
 handle_info(_Info, State) ->
@@ -239,7 +238,6 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
 
 %%% Internal -------------------------------------------------------------------
 
@@ -296,6 +294,5 @@ find_creature_by_pos_test() ->
     ?assertEqual(false, creature_at({0,0}, {0,0})),
     add_creature({0,0}, Cid, {0,0}),
     ?assertEqual({ok, Cid}, creature_at({0,0}, {0,0})).
-
 
 -endif.
