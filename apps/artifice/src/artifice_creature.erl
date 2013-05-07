@@ -19,7 +19,8 @@
 -record(state, {
           cid   :: binary(),
           pos   :: {integer(), integer()},
-          brain :: artifice_brain:brain()
+          brain :: artifice_brain:brain(),
+          energy :: non_neg_integer()
          }).
 
 -define(THINK_HZ, 1).
@@ -75,10 +76,11 @@ handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
              end,
     {noreply, State1}.
 
-handle_info(?THINK_MESSAGE, State) ->
-    ?BRAIN:react(State#state.brain, [{pid, self()}]),
+handle_info(?THINK_MESSAGE, State0) ->
+    State1 = drain_energy(State0),
+    ?BRAIN:react(State1#state.brain, [{pid, self()}]),
     reset_timer(),
-    {noreply, State};
+    {noreply, State1};
 handle_info({event, Event}, State) ->
     handle_event(Event),
     {noreply, State};
@@ -130,3 +132,9 @@ actually_move(NewPos, State) ->
     end,
     artifice_chunk:update_subscriptions(OldPos, NewPos),
     State#state{pos=NewPos}.
+
+%% @doc Apply ambient energy loss to the creature.
+%% @private
+drain_energy(#state{energy=Energy0}=State) ->
+    Energy1 = Energy0 - artifice_config:energy_loss_rate(),
+    State#state{energy=Energy1}.
