@@ -3,6 +3,41 @@
     padding: 0;
 }
 
+body {
+    font-family: 'Ubuntu Mono', 'Droid Sans Mono', sans-serif;
+}
+
+#gjs-canvas {
+    vertical-align: bottom;
+}
+
+#debug {
+    background: black;
+    color: #eee;
+    padding: 2px;
+    border-bottom: 1px solid #5CAAD1;
+}
+
+#debug .label {
+    color: #5CAAD1;
+    font-weight: bold;
+}
+
+#console {
+    background: black;
+    height: 200px;
+    overflow: hidden;
+}
+
+#console-lines {
+    list-item-type: none;
+}
+
+#console-lines .debug { color: #aaa;   }
+#console-lines .info  { color: white;  }
+#console-lines .warn  { color: yellow; }
+#console-lines .error { color: red;    }
+
 #wrapper {
     margin: 0 auto;
     width: 640px;

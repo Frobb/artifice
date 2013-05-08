@@ -12,6 +12,7 @@ handlers["creature_move"] = handleCreatureMove;
 handlers["creature_remove"] = handleCreatureRemove;
 
 function handleCreatureAdd(payload) {
+    writeConsole("debug", "Creature '" + payload.cid + "' added.");
     var c = new creature.Creature(payload.cid, payload.pos);
     creatures[c.cid] = c;    
 }
@@ -25,6 +26,7 @@ function handleCreatureMove(payload) {
 }
 
 function handleCreatureRemove(payload) {
+    writeConsole("debug", "Creature '" + payload.cid + "' removed.");
     delete creatures[payload.cid];
 }
 
@@ -49,6 +51,18 @@ if (!('WebSocket' in window)) {
 }
 
 var socket = new WebSocket('ws://' + document.location.host + '/ws');
+
+socket.onopen = function() {
+    writeConsole("info", "Connected to server.");
+}
+
+socket.onclose = function() {
+    writeConsole("info", "Disconected from server.");
+}
+
+socket.onerror = function() {
+    writeConsole("error", "A WebSocket error occurred.");
+}
 
 socket.onmessage = function(evt) {
     var msg = JSON.parse(evt.data);
@@ -130,16 +144,19 @@ gamejs.ready(function() {
     function drawDebug() {
         var gridX = Math.floor(camera.x / 128);
         var gridY = Math.floor(camera.y / 128);
-        $('#debug').text(
-                'world: (' + camera.x.toFixed(2) + "," + camera.y.toFixed(2) + ')' +
-                ' chunk: (' + gridX + ',' + gridY + ')');
+        $('#debug-world-x').text(camera.x.toFixed(2));
+        $('#debug-world-y').text(camera.y.toFixed(2));
+        $('#debug-chunk-x').text(gridX);
+        $('#debug-chunk-y').text(gridY);
     }
 });
 
 // Support functions -----------------------------------------------------------
 
-function writeConsole(text) {
-    var elem = $('<li/>');
-    elem.text(text);
-    $('#console').append(elem);
+function writeConsole(category, text) {
+    var elem = $('<li class="' + category + '" />');
+    elem.text('[' + category.toUpperCase() + '] ' + text);
+    $('#console-lines').append(elem);
+    var console = $('#console');
+    console.scrollTop(console[0].scrollHeight - console.height());
 }
