@@ -68,7 +68,9 @@ encode_event(#evt_creature_move{cid=Cid, pos={X,Y}}) ->
                    [{<<"cid">>, Cid},
                     {<<"pos">>, [{<<"x">>, X}, {<<"y">>, Y}]}]);
 encode_event(#evt_creature_remove{cid=Cid}) ->
-    encode_message(<<"creature_remove">>, [{<<"cid">>, Cid}]).
+    encode_message(<<"creature_remove">>, [{<<"cid">>, Cid}]);
+encode_event(#evt_creature_die{cid=Cid}) ->
+    encode_message(<<"creature_die">>, [{<<"cid">>, Cid}]).
 
 %% @doc Encode a message to a JSON binary.
 %% @private

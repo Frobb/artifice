@@ -42,7 +42,7 @@ start_supervised(Cid, Pos) ->
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
 child_spec(Cid, Pos) ->
     StartFunc = {?MODULE, start_link, [Cid, Pos]},
-    Restart = permanent,
+    Restart = transient,
     Shutdown = brutal_kill,
     Type = worker,
     Modules = [?MODULE],
@@ -81,9 +81,20 @@ handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
 
 handle_info(?THINK_MESSAGE, State0) ->
     State1 = drain_energy(State0, energy_cost(ambient)),
-    ?BRAIN:react(State1#state.brain, [{pid, self()}]),
-    reset_timer(),
-    {noreply, State1};
+    %% Did we die?
+    case State1#state.energy >= 0 of
+        true ->
+            ?BRAIN:react(State1#state.brain, [{pid, self()}]),
+            reset_timer(),
+            {noreply, State1};
+        false ->
+            Chunk = artifice_chunk:chunk_at(State1#state.pos),
+            artifice_chunk:publish(Chunk, #evt_creature_die{
+                                     cid=State1#state.cid
+                                    }),
+            lager:debug("Creature ~s died.", [State1#state.cid]),
+            {stop, normal, State1}
+    end;
 handle_info({event, Event}, State) ->
     handle_event(Event),
     {noreply, State};

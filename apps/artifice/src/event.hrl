@@ -11,3 +11,7 @@
           cid :: binary(),
           pos :: {integer(), integer()}
          }).
+
+-record(evt_creature_die, {
+          cid :: binary()
+         }).

@@ -10,6 +10,7 @@ handlers["log"] = function() { /* suppress */ };
 handlers["creature_add"] = handleCreatureAdd;
 handlers["creature_move"] = handleCreatureMove;
 handlers["creature_remove"] = handleCreatureRemove;
+handlers["creature_die"] = handleCreatureDie;
 
 function handleCreatureAdd(payload) {
     writeConsole("debug", "Creature '" + payload.cid + "' added.");
@@ -28,6 +29,10 @@ function handleCreatureMove(payload) {
 function handleCreatureRemove(payload) {
     writeConsole("debug", "Creature '" + payload.cid + "' removed.");
     delete creatures[payload.cid];
+}
+
+function handleCreatureDie(payload) {
+    writeConsole("debug", "Creature '" + payload.cid + "' died.");
 }
 
 function sendMove(x, y) {
