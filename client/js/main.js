@@ -48,7 +48,7 @@ if (!('WebSocket' in window)) {
     return;
 }
 
-var socket = new WebSocket('ws://' + document.location.host);
+var socket = new WebSocket('ws://' + document.location.host + '/ws');
 
 socket.onmessage = function(evt) {
     var msg = JSON.parse(evt.data);

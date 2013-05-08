@@ -12,7 +12,12 @@
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
         {'_', [
-               {"/", artifice_client, []},
+               {"/", cowboy_static, [
+                   {directory, {priv_dir, artifice, [<<"static">>]}},
+                   {file, <<"index.html">>},
+                   {mimetypes, {fun mimetypes:path_to_mimes/2, default}}
+               ]},
+               {"/ws", artifice_client, []},
                {"/[...]", cowboy_static, [
                    {directory, {priv_dir, artifice, [<<"static">>]}},
                    {mimetypes, {fun mimetypes:path_to_mimes/2, default}}
