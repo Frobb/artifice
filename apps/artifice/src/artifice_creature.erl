@@ -16,18 +16,20 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
+-include("common.hrl").
+-include("event.hrl").
+
 -record(state, {
           cid   :: binary(),
           pos   :: {integer(), integer()},
           brain :: artifice_brain:brain(),
-          energy :: non_neg_integer()
+          energy :: non_neg_integer(),
+          known_creatures = [] :: [{binary(), #creature{}}]
          }).
 
 -define(THINK_HZ, 1).
 -define(THINK_MESSAGE, think).
--define(BRAIN, artifice_brain_dumb).
-
--include("event.hrl").
+-define(BRAIN, artifice_brain_nn).
 
 %%% API ------------------------------------------------------------------------
 
@@ -84,7 +86,7 @@ handle_info(?THINK_MESSAGE, State0) ->
     %% Did we die?
     case State1#state.energy >= 0 of
         true ->
-            ?BRAIN:react(State1#state.brain, [{pid, self()}]),
+            ?BRAIN:react(State1#state.brain, make_percept(State1)),
             reset_timer(),
             {noreply, State1};
         false ->
@@ -95,9 +97,9 @@ handle_info(?THINK_MESSAGE, State0) ->
             lager:debug("Creature ~s died.", [State1#state.cid]),
             {stop, normal, State1}
     end;
-handle_info({event, Event}, State) ->
-    handle_event(Event),
-    {noreply, State};
+handle_info({event, Event}, State0) ->
+    State1 = handle_event(Event, State0),
+    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -112,8 +114,18 @@ code_change(_OldVsn, State, _Extra) ->
 
 %%% Event handling -------------------------------------------------------------
 
-handle_event(_Event) ->
-    ok.
+handle_event(#evt_creature_add{cid=Cid, pos=Pos},
+             #state{known_creatures=Creatures}=State) ->
+    State#state{known_creatures=[{Cid, #creature{cid=Cid, pos=Pos}}|Creatures]};
+handle_event(#evt_creature_move{cid=Cid, pos=Pos},
+            #state{known_creatures=Creatures0}=State) ->
+    Creatures1 = lists:keyreplace(Cid, 1, Creatures0, #creature{cid=Cid, pos=Pos}),
+    State#state{known_creatures=Creatures1};
+handle_event(#evt_creature_remove{cid=Cid},
+            #state{known_creatures=Creatures}=State) ->
+    State#state{known_creatures=lists:keydelete(Cid, 1, Creatures)};
+handle_event(_Event, State) ->
+    State.
 
 %%% Internal -------------------------------------------------------------------
 
@@ -160,3 +172,11 @@ energy_cost(Action) ->
     Costs = artifice_config:energy_costs(),
     {_, Cost} = lists:keyfind(Action, 1, Costs),
     Cost.
+
+%% @doc Build a percept for the brain from the information known right now.
+%% @private
+make_percept(#state{energy=Energy, pos=Pos, known_creatures=Creatures}) ->
+    [{pid, self()},
+     {energy, Energy},
+     {pos, Pos},
+     {creatures, [C || {_, C} <- Creatures]}].

@@ -1,6 +1,7 @@
 -module(artifice_chunk).
 -behaviour(gen_server).
 
+-include("common.hrl").
 -include("event.hrl").
 
 -ifdef(TEST).
@@ -38,12 +39,6 @@
 -record(sub, {
           pid :: pid(),
           ref :: reference()
-         }).
-
-%% Represents a creature
--record(creature, {
-          cid :: binary(),
-          pos :: {integer(), integer()}
          }).
 
 -record(state, {
