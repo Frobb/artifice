@@ -59,7 +59,10 @@ move(Pid, Dir) ->
 %%% gen_server callbacks -------------------------------------------------------
 
 init([Cid, Pos]) ->
-    State = #state{cid=Cid, pos=Pos, brain=?BRAIN:random()},
+    State = #state{cid=Cid,
+                   pos=Pos,
+                   brain=?BRAIN:random(),
+                   energy=artifice_config:initial_energy()},
     add_to_initial_chunk(State),
     reset_timer(),
     {ok, State}.
