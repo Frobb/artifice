@@ -80,7 +80,7 @@ handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
     {noreply, State1}.
 
 handle_info(?THINK_MESSAGE, State0) ->
-    State1 = drain_energy(State0),
+    State1 = drain_energy(State0, energy_cost(ambient)),
     ?BRAIN:react(State1#state.brain, [{pid, self()}]),
     reset_timer(),
     {noreply, State1};
@@ -121,9 +121,10 @@ add_to_initial_chunk(State) ->
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
 %% @private
-actually_move(NewPos, State) ->
-    Cid = State#state.cid,
-    OldPos = State#state.pos,
+actually_move(NewPos, State0) ->
+    State1 = drain_energy(State0, energy_cost(move)),
+    Cid = State1#state.cid,
+    OldPos = State1#state.pos,
     NewChunk = artifice_chunk:chunk_at(NewPos),
     OldChunk = artifice_chunk:chunk_at(OldPos),
     case NewChunk == OldChunk of
@@ -134,10 +135,17 @@ actually_move(NewPos, State) ->
             artifice_chunk:move_creature(NewChunk, Cid, NewPos)
     end,
     artifice_chunk:update_subscriptions(OldPos, NewPos),
-    State#state{pos=NewPos}.
+    State1#state{pos=NewPos}.
 
 %% @doc Apply ambient energy loss to the creature.
 %% @private
-drain_energy(#state{energy=Energy0}=State) ->
-    Energy1 = Energy0 - artifice_config:energy_loss_rate(),
+drain_energy(#state{energy=Energy0}=State, Amount) ->
+    Energy1 = Energy0 - Amount,
     State#state{energy=Energy1}.
+
+%% @doc Get the energy cost for an action.
+%% @private
+energy_cost(Action) ->
+    Costs = artifice_config:energy_costs(),
+    {_, Cost} = lists:keyfind(Action, 1, Costs),
+    Cost.

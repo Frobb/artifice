@@ -3,7 +3,7 @@
 %%% API
 -export([simulation_rate/0, simulation_rate/1]).
 -export([initial_energy/0, initial_energy/1]).
--export([energy_loss_rate/0, energy_loss_rate/1]).
+-export([energy_costs/0, energy_costs/1]).
 
 -define(APP, artifice).
 
@@ -26,12 +26,12 @@ initial_energy(InitialEnergy) ->
     set_env(initial_energy, InitialEnergy).
 
 %% @doc Get the per-tick energy loss rate for creatures.
-energy_loss_rate() ->
-    get_env(energy_loss_rate).
+energy_costs() ->
+    get_env(energy_costs).
 
 %% @doc Set the per-tick energy loss rate for creatures.
-energy_loss_rate(Rate) ->
-    set_env(energy_loss_rate, Rate).
+energy_costs(Costs) ->
+    set_env(energy_costs, Costs).
 
 %%% Internal -------------------------------------------------------------------
 
