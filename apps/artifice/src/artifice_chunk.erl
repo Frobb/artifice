@@ -24,6 +24,9 @@
 -export([update_subscriptions/2]).
 -export([unsubscribe_final/1]).
 
+-export([add_food/2]).
+-export([remove_food/1]).
+
 -export([chunk_at/1]).
 -export([adjacent_chunks/1]).
 -export([event_log/1]).
@@ -46,6 +49,7 @@
           subs = [] :: list(),
           creatures = [] :: list(),
 	  log = [] :: list(), 
+          food :: dict(),
           chunk
          }).
 
@@ -166,23 +170,59 @@ creature_at(Chunk, Pos) ->
     Name = registered_name(Chunk),
     gen_server:call(Name, {creature_at, Pos}).
 
+%% @doc Get the event log for the given chunk.
 event_log(Chunk) ->
     ok = ensure_started(Chunk),
     Name = registered_name(Chunk),
     gen_server:call(Name, event_log).
 
+%% @doc Add food at the specified position.
+%% Returns ok if there was no food there already, otherwise error.
+add_food(Pos, Type) ->
+    Chunk = chunk_at(Pos),
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:call(Name, {add_food, Pos, Type}).
+
+%% @doc Remove food at the specified position, if any.
+%% Returns ok if food was successfully removed, otherwise error.
+remove_food(Pos) ->
+    Chunk = chunk_at(Pos),
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:call(Name, {remove_food, Pos}).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
     lager:info("Chunk (~w,~w) online.", [X, Y]),
-    State = #state{chunk=Chunk},
+    State = #state{chunk=Chunk, food=dict:new()},
     {ok, State}.
 
 handle_call({creature_at, Pos}, _From, #state{creatures=Creatures}=State) ->
     {reply, find_creature_by_pos(Creatures, Pos), State};
 
 handle_call(event_log, _From, #state{log=Log}=State) ->
-    {reply, lists:reverse(Log), State}.
+    {reply, lists:reverse(Log), State};
+
+handle_call({add_food, Pos, Type}, _From, #state{food=Food0, subs=Subs}=State) ->
+    case dict:is_key(Pos, Food0) of
+        false ->
+            do_publish(#evt_food_add{pos=Pos, type=Type}, Subs),
+            Food1 = dict:store(Pos, #food{pos=Pos, type=Type}, Food0),
+            {reply, ok, State#state{food=Food1}};
+        true ->
+            {reply, error, State}
+    end;
+
+handle_call({remove_food, Pos}, _From, #state{food=Food, subs=Subs}=State) ->
+    case dict:is_key(Pos, Food) of
+        true ->
+            do_publish(#evt_food_remove{pos=Pos}, Subs),
+            {reply, ok, State#state{food=dict:erase(Pos, Food)}};
+        false ->
+            {reply, error, State}
+    end.
 
 handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
     lager:debug("Process ~p subscribed to chunk ~p.", [Pid, Chunk]),

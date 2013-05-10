@@ -4,6 +4,7 @@
 -export([simulation_rate/0, simulation_rate/1]).
 -export([initial_energy/0, initial_energy/1]).
 -export([energy_costs/0, energy_costs/1]).
+-export([food_energy/0, food_energy/1]).
 
 -define(APP, artifice).
 
@@ -32,6 +33,14 @@ energy_costs() ->
 %% @doc Set the per-tick energy loss rate for creatures.
 energy_costs(Costs) ->
     set_env(energy_costs, Costs).
+
+%% @doc Get the amount of energy gained from eating food.
+food_energy() ->
+    get_env(food_energy).
+
+%% @doc Set the amount of energy gained from eating food.
+food_energy(Energy) ->
+    set_env(food_energy, Energy).
 
 %%% Internal -------------------------------------------------------------------
 

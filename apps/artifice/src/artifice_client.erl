@@ -53,6 +53,12 @@ handle(<<"creature_add">>, Payload, State) ->
     {_, X} = lists:keyfind(<<"x">>, 1, Payload),
     {_, Y} = lists:keyfind(<<"y">>, 1, Payload),
     artifice_creature:start_supervised(artifice_creature:new_cid(), {X, Y}),
+    {ok, State};
+
+handle(<<"food_add">>, Payload, State) ->
+    {_, X} = lists:keyfind(<<"x">>, 1, Payload),
+    {_, Y} = lists:keyfind(<<"y">>, 1, Payload),
+    artifice_chunk:add_food({X, Y}, noodles),
     {ok, State}.
 
 %%% Internal -------------------------------------------------------------------
@@ -70,7 +76,18 @@ encode_event(#evt_creature_move{cid=Cid, pos={X,Y}}) ->
 encode_event(#evt_creature_remove{cid=Cid}) ->
     encode_message(<<"creature_remove">>, [{<<"cid">>, Cid}]);
 encode_event(#evt_creature_die{cid=Cid}) ->
-    encode_message(<<"creature_die">>, [{<<"cid">>, Cid}]).
+    encode_message(<<"creature_die">>, [{<<"cid">>, Cid}]);
+encode_event(#evt_food_add{pos={X, Y}, type=Type}) ->
+    TypeName = list_to_binary(atom_to_list(Type)),
+    encode_message(<<"food_add">>,
+                   [{<<"pos">>,
+                     [{<<"x">>, X},
+                     {<<"y">>, Y}]},
+                    {<<"type">>, TypeName}]);
+encode_event(#evt_food_remove{pos={X, Y}}) ->
+    encode_message(<<"food_remove">>,
+                   [{<<"pos">>,
+                     [{<<"x">>, X}, {<<"y">>, Y}]}]).
 
 %% @doc Encode a message to a JSON binary.
 %% @private

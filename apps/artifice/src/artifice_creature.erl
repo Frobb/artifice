@@ -7,6 +7,7 @@
 -export([child_spec/2]).
 -export([new_cid/0]).
 -export([move/2]).
+-export([eat/1]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -24,7 +25,8 @@
           pos   :: {integer(), integer()},
           brain :: artifice_brain:brain(),
           energy :: non_neg_integer(),
-          known_creatures = [] :: [{binary(), #creature{}}]
+          known_creatures = [] :: [{binary(), #creature{}}],
+          known_food = [] :: [#food{}]
          }).
 
 -define(THINK_HZ, 1).
@@ -58,6 +60,10 @@ new_cid() ->
 move(Pid, Dir) ->
     gen_server:cast(Pid, {move, Dir}).
 
+%% @doc Eat food at the current position.
+eat(Pid) ->
+    gen_server:cast(Pid, eat).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([Cid, Pos]) ->
@@ -79,7 +85,18 @@ handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
                  east  -> actually_move({X+1, Y}, State0);
                  west  -> actually_move({X-1, Y}, State0)
              end,
-    {noreply, State1}.
+    {noreply, State1};
+
+handle_cast(eat, #state{cid=Cid, pos=Pos, energy=Energy0}=State) ->
+    case artifice_chunk:remove_food(Pos) of
+        ok ->
+            lager:debug("Creature '~s' ate some food.", [Cid]),
+            Energy1 = min(artifice_config:initial_energy(),
+                          Energy0 + artifice_config:food_energy()),
+            {noreply, State#state{energy=Energy1}};
+        error ->
+            {noreply, State}
+    end.
 
 handle_info(?THINK_MESSAGE, State0) ->
     State1 = drain_energy(State0, energy_cost(ambient)),
@@ -94,6 +111,7 @@ handle_info(?THINK_MESSAGE, State0) ->
             artifice_chunk:publish(Chunk, #evt_creature_die{
                                      cid=State1#state.cid
                                     }),
+            artifice_chunk:add_food(State1#state.pos, carcass),
             lager:debug("Creature ~s died.", [State1#state.cid]),
             {stop, normal, State1}
     end;
@@ -124,6 +142,11 @@ handle_event(#evt_creature_move{cid=Cid, pos=Pos},
 handle_event(#evt_creature_remove{cid=Cid},
             #state{known_creatures=Creatures}=State) ->
     State#state{known_creatures=lists:keydelete(Cid, 1, Creatures)};
+handle_event(#evt_food_add{pos=Pos, type=Type}, #state{known_food=Food}=State) ->
+    State#state{known_food=[#food{pos=Pos, type=Type}|Food]};
+handle_event(#evt_food_remove{pos=Pos}, #state{known_food=Food0}=State) ->
+    Food1 = lists:keydelete(Pos, 2, Food0), %% XXX: Relying on record structure!
+    State#state{known_food=Food1};
 handle_event(_Event, State) ->
     State.
 
@@ -175,8 +198,12 @@ energy_cost(Action) ->
 
 %% @doc Build a percept for the brain from the information known right now.
 %% @private
-make_percept(#state{energy=Energy, pos=Pos, known_creatures=Creatures}) ->
+make_percept(#state{energy=Energy,
+                    pos=Pos,
+                    known_creatures=Creatures,
+                    known_food=Food}) ->
     [{pid, self()},
      {energy, Energy},
      {pos, Pos},
-     {creatures, [C || {_, C} <- Creatures]}].
+     {creatures, [C || {_, C} <- Creatures]},
+     {food, Food}].

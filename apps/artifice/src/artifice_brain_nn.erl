@@ -13,8 +13,8 @@
 
 %% Network node count parameters. Refers to the input,
 %% hidden and output layers respectively.
--define(INPUT_COUNT,  6).
--define(OUTPUT_COUNT, 4).
+-define(INPUT_COUNT,  8).
+-define(OUTPUT_COUNT, 5).
 -define(HIDDEN_COUNT, 2).
 -define(WEIGHT_COUNT, ?HIDDEN_COUNT * (?INPUT_COUNT + ?OUTPUT_COUNT)).
 
@@ -34,8 +34,13 @@ random() ->
     #nn{hidden_weights=HW,
         output_weights=OW}.
 
-crossover(Brain1, _) ->
-    Brain1. % no fair!
+crossover(Brain1, Brain2) ->
+    Brain1Code = pack_brain(Brain1),
+    Brain2Code = pack_brain(Brain2),
+    SplitPt = random:unform(size(Brain1Code)-1),
+    <<Left:SplitPt/bytes, _Rest/binary>> = Brain1Code,
+    <<_Rest:SplitPt/bytes, Right/binary>> = Brain2Code,
+    pack_brain(<<Left/binary, Right/binary>>).
 
 mutate(Brain) ->
     Brain. % derp
@@ -45,18 +50,27 @@ react(Brain, Percept) ->
     {energy, Energy} = lists:keyfind(energy, 1, Percept),
     {pos, {X, Y}=Pos} = lists:keyfind(pos, 1, Percept),
     {creatures, Creatures} = lists:keyfind(creatures, 1, Percept),
-    {CX, CY} = vector_to_nearest_creature(Pos, Creatures),
-    [N, S, W, E] = activate_network([Energy,
-                                     X, Y,
-                                     CX, CY,
-                                     length(Creatures)],
-                                    Brain),
+    {food, Food} = lists:keyfind(food, 1, Percept),
+    {CX, CY} = vector_to_nearest(Pos, [C#creature.pos || C <- Creatures]),
+    {FX, FY} = vector_to_nearest(Pos, [F#food.pos || F <- Food]),
+    [N, S, W, E, Eat] = activate_network([Energy,
+                                          X, Y,
+                                          CX, CY,
+                                          FX, FY,
+                                          length(Creatures)],
+                                         Brain),
+    %% Movement
     if
         N >= 1 -> artifice_creature:move(Pid, north);
         S >= 1 -> artifice_creature:move(Pid, south);
         W >= 1 -> artifice_creature:move(Pid, west);
         E >= 1 -> artifice_creature:move(Pid, east);
         true   -> ok
+    end,
+    %% Eating
+    if
+        Eat >= 1 -> artifice_creature:eat(Pid);
+        true     -> ok
     end.
 
 %%% Internal -------------------------------------------------------------------
@@ -85,6 +99,12 @@ random_neuron(NumWeights) ->
 random_weight() ->
     (random:uniform()-0.5) * 10.0. % TODO twiddle for glory
 
+pack_brain(#nn{hidden_weights=HW, output_weights=OW}) ->
+    <<(pack_layer(HW))/binary, (pack_layer(OW))/binary>>.
+
+pack_layer(Neurons) ->
+    << <<(pack_floats(Weights))/binary>> || Weights <- Neurons >>.
+
 pack_floats(Floats) ->
     actually_pack_floats(Floats, <<>>).
 
@@ -101,10 +121,10 @@ actually_unpack_floats(0, Buf, Acc) ->
 actually_unpack_floats(N, <<F:?FLOAT_BITS/float, Rest/binary>>, Acc) ->
     actually_unpack_floats(N-1, Rest, [F|Acc]).
 
-vector_to_nearest_creature({X1, Y1}=MyPos, [C|Cs]) ->
+vector_to_nearest({X1, Y1}=MyPos, [P|Ps]) ->
     {X2, Y2} =
         lists:foldl(
-          fun(#creature{pos=ItsPos}, LeaderPos) ->
+          fun(ItsPos, LeaderPos) ->
                   ItsDist    = artifice_util:squared_distance(MyPos, ItsPos),
                   LeaderDist = artifice_util:squared_distance(MyPos, LeaderPos),
                   case ItsDist < LeaderDist of
@@ -112,8 +132,8 @@ vector_to_nearest_creature({X1, Y1}=MyPos, [C|Cs]) ->
                       false -> LeaderPos
                   end
           end,
-          C#creature.pos,
-          Cs),
+          P,
+          Ps),
     {X1-X2, Y1-Y2};
-vector_to_nearest_creature(_MyPos, []) ->
-    {0, 0}. % TODO placeholder vector
+vector_to_nearest(_MyPos, []) ->
+    {0, 0}. % TODO placeholder vector    

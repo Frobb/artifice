@@ -1,6 +1,7 @@
 var gamejs = require('gamejs');
 
 var creature = require('./creature');
+var food = require('./food');
 
 // Message handlers and senders ------------------------------------------------
 
@@ -11,6 +12,8 @@ handlers["creature_add"] = handleCreatureAdd;
 handlers["creature_move"] = handleCreatureMove;
 handlers["creature_remove"] = handleCreatureRemove;
 handlers["creature_die"] = handleCreatureDie;
+handlers["food_add"] = handleFoodAdd;
+handlers["food_remove"] = handleFoodRemove;
 
 function handleCreatureAdd(payload) {
     writeConsole("debug", "Creature '" + payload.cid + "' added.");
@@ -35,12 +38,32 @@ function handleCreatureDie(payload) {
     writeConsole("debug", "Creature '" + payload.cid + "' died.");
 }
 
+function handleFoodAdd(payload) {
+    var f = new food.Food(payload.pos, payload.type);
+    foods.push(f);
+    writeConsole('debug', 'Added food at ' + formatPos(payload.pos) + '.');
+}
+
+function handleFoodRemove(payload) {
+    for (var i in foods) {
+        if (foods[i].pos.x == payload.pos.x &&
+            foods[i].pos.y == payload.pos.y) {
+            writeConsole('debug', 'Removed food at ' + formatPos(payload.pos) + '.');
+            delete foods[i];
+        }
+    }
+}
+
 function sendMove(x, y) {
     sendMsg('move', { 'x': x, 'y': y });
 }
 
 function sendCreatureAdd(x, y) {
     sendMsg('creature_add', {'x': x, 'y': y });
+}
+
+function sendFoodAdd(x, y) {
+    sendMsg('food_add', {'x': x, 'y': y});
 }
 
 function sendMsg(type, payload) {
@@ -86,10 +109,14 @@ var MAP_HEIGHT = 480;
 var TILE_SIZE = 32; //px
 
 var creatures = {};
+var foods = []; // Name to avoid conflict with food module
+var addMode = null;
 var camera = { x: 0, y: 0 };
 var moveState = { up: 0, left: 0, down: 0, right: 0 };
 var moveSpeed = 5.0;
 var moveMult = 1.0;
+
+setAddMode('creature');
 
 gamejs.preload(['../sprites/grass.png']);
 
@@ -108,11 +135,17 @@ gamejs.ready(function() {
             else if (event.key === gamejs.event.K_SHIFT) {
                 moveMult = event.type === gamejs.event.KEY_DOWN ? 10.0 : 1.0;
             }
+            // Switching between add modes (c=creature, f=food, ...)
+            else if (event.key === gamejs.event.K_c &&
+                     event.type === gamejs.event.KEY_UP)
+                setAddMode('creature');
+            else if (event.key === gamejs.event.K_f &&
+                     event.type === gamejs.event.KEY_UP)
+                setAddMode('food');
         } else if (event.type === gamejs.event.MOUSE_UP) {
             var cellX = Math.floor(camera.x + event.pos[0] / TILE_SIZE);
             var cellY = Math.floor(camera.y + event.pos[1] / TILE_SIZE);
-            console.log(cellX);
-            sendCreatureAdd(cellX, cellY);
+            addObjectAt(cellX, cellY);
         }
     });
 
@@ -133,6 +166,15 @@ gamejs.ready(function() {
                                         TILE_SIZE, TILE_SIZE);
                 display.blit(grass, r);
             }
+        }
+
+        // Draw all food
+        for (var i in foods) {
+            var f = foods[i];
+            var rect = new gamejs.Rect((f.pos.x-camera.x)*TILE_SIZE,
+                                       (f.pos.y-camera.y)*TILE_SIZE,
+                                       TILE_SIZE, TILE_SIZE);
+            gamejs.draw.rect(display, "rgb(0,0,255)", rect);
         }
 
         // Draw all creatures
@@ -164,4 +206,21 @@ function writeConsole(category, text) {
     $('#console-lines').append(elem);
     var console = $('#console');
     console.scrollTop(console[0].scrollHeight - console.height());
+}
+
+function setAddMode(mode) {
+    addMode = mode;
+    $('#debug-add-mode').text(mode);
+}
+
+function addObjectAt(x, y) {
+    if (addMode == 'creature') sendCreatureAdd(x, y);
+    else if (addMode == 'food') sendFoodAdd(x, y);
+    else {
+        alert("Unknown add mode: " + addMode);
+    }
+}
+
+function formatPos(pos) {
+    return '(' + pos.x + ',' + pos.y + ')';
 }

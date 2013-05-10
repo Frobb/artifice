@@ -15,3 +15,12 @@
 -record(evt_creature_die, {
           cid :: binary()
          }).
+
+-record(evt_food_add, {
+          pos  :: {integer(), integer()},
+          type :: atom()
+         }).
+
+-record(evt_food_remove, {
+          pos :: {integer(), integer()}
+         }).
