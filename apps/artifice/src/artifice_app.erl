@@ -30,6 +30,7 @@ start(_StartType, _StartArgs) ->
                    [{port, 8080}],
                    [{env, [{dispatch, Dispatch}]}]
                   ),
+    artifice_creature_registry:init(),
     artifice_sup:start_link().
 
 stop(_State) ->
