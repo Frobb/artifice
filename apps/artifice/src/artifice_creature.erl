@@ -125,6 +125,7 @@ terminate(_Reason, #state{cid=Cid, pos=Pos}) ->
     Chunk = artifice_chunk:chunk_at(Pos),
     artifice_chunk:remove_creature(Chunk, Cid),
     artifice_chunk:unsubscribe_final(Pos),
+    artifice_creature_registry:unregister(Cid),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -163,6 +164,7 @@ add_to_initial_chunk(State) ->
     Chunk = artifice_chunk:chunk_at(State#state.pos),
     artifice_chunk:add_creature(Chunk, State#state.cid, State#state.pos),
     artifice_chunk:subscribe_initial(State#state.pos),
+    artifice_creature_registry:register(State#state.cid, self()),
     ok.
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
