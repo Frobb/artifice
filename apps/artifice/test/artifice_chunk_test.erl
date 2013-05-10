@@ -52,6 +52,12 @@ main_test_() ->
                                                   ?CHUNK, {0, 0})
                                    )
                end},
+	      {"Getting the event log",
+	       fun() ->
+		       ?assertEqual({evt_creature_add, <<"mycid1">>, {0, 0}}, hd(artifice_chunk:event_log(
+										  ?CHUNK))
+				   )
+	       end},
               {"Moving a creature updates cells",
                fun() ->
                        ?assertEqual(ok, artifice_chunk:move_creature(

@@ -26,6 +26,7 @@
 
 -export([chunk_at/1]).
 -export([adjacent_chunks/1]).
+-export([event_log/1]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -44,6 +45,7 @@
 -record(state, {
           subs = [] :: list(),
           creatures = [] :: list(),
+	  log = [] :: list(), 
           chunk
          }).
 
@@ -164,6 +166,11 @@ creature_at(Chunk, Pos) ->
     Name = registered_name(Chunk),
     gen_server:call(Name, {creature_at, Pos}).
 
+event_log(Chunk) ->
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:call(Name, event_log).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
@@ -172,7 +179,10 @@ init([{X,Y}=Chunk]) ->
     {ok, State}.
 
 handle_call({creature_at, Pos}, _From, #state{creatures=Creatures}=State) ->
-    {reply, find_creature_by_pos(Creatures, Pos), State}.
+    {reply, find_creature_by_pos(Creatures, Pos), State};
+
+handle_call(event_log, _From, #state{log=Log}=State) ->
+    {reply, lists:reverse(Log), State}.
 
 handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
     lager:debug("Process ~p subscribed to chunk ~p.", [Pid, Chunk]),
@@ -192,22 +202,28 @@ handle_cast({publish, Event}, #state{subs=Subs}=State) ->
     do_publish(Event, Subs),
     {noreply, State};
 
-handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures, subs=Subs}=State) ->
+handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures, subs=Subs, log=Log}=State) ->
     do_publish(#evt_creature_add{cid=Cid, pos=Pos}, Subs),
+    Event = #evt_creature_add{cid=Cid, pos=Pos},
+    Log1 = [Event | Log],
     Creature = #creature{cid=Cid, pos=Pos},
-    {noreply, State#state{creatures=[{Cid, Creature}|Creatures]}};
+    {noreply, State#state{creatures=[{Cid, Creature}|Creatures], log=Log1}};
 
-handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs}=State) ->
+handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs, log=Log}=State) ->
     do_publish(#evt_creature_move{cid=Cid, pos=Pos}, Subs),
     {_, Creature0} = lists:keyfind(Cid, 1, Creatures0),
     Creature1 = Creature0#creature{pos=Pos},
     Creatures1 = lists:keyreplace(Cid, 1, Creatures0, {Cid, Creature1}),
-    {noreply, State#state{creatures=Creatures1}};
+    Event = #evt_creature_move{cid=Cid, pos=Pos},
+    Log1 = [Event | Log], 
+    {noreply, State#state{creatures=Creatures1, log=Log1}};
 
-handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs}=State) ->
+handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs, log=Log}=State) ->
     do_publish(#evt_creature_remove{cid=Cid}, Subs),
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
-    {noreply, State#state{creatures=Creatures1}}.
+    Event = #evt_creature_remove{cid=Cid},
+    Log1 = [Event | Log],
+    {noreply, State#state{creatures=Creatures1, log=Log1}}.
 
 handle_info(_Info, State) ->
     {noreply, State}.
