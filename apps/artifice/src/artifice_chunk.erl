@@ -48,7 +48,7 @@
 -record(state, {
           subs = [] :: list(),
           creatures = [] :: list(),
-	  log = [] :: list(), 
+	  log :: artifice_event_log:log(),
           food :: dict(),
           chunk
          }).
@@ -196,32 +196,32 @@ remove_food(Pos) ->
 
 init([{X,Y}=Chunk]) ->
     lager:info("Chunk (~w,~w) online.", [X, Y]),
-    State = #state{chunk=Chunk, food=dict:new()},
+    State = #state{chunk=Chunk, food=dict:new(), log=artifice_event_log:new()},
     {ok, State}.
 
 handle_call({creature_at, Pos}, _From, #state{creatures=Creatures}=State) ->
     {reply, find_creature_by_pos(Creatures, Pos), State};
 
 handle_call(event_log, _From, #state{log=Log}=State) ->
-    {reply, lists:reverse(Log), State};
+    {reply, artifice_event_log:to_list(Log), State};
 
-handle_call({add_food, Pos, Type}, _From, #state{food=Food0, subs=Subs}=State) ->
+handle_call({add_food, Pos, Type}, _From, #state{food=Food0}=State0) ->
     case dict:is_key(Pos, Food0) of
         false ->
-            do_publish(#evt_food_add{pos=Pos, type=Type}, Subs),
+            State1 = do_publish(#evt_food_add{pos=Pos, type=Type}, State0),
             Food1 = dict:store(Pos, #food{pos=Pos, type=Type}, Food0),
-            {reply, ok, State#state{food=Food1}};
+            {reply, ok, State1#state{food=Food1}};
         true ->
-            {reply, error, State}
+            {reply, error, State0}
     end;
 
-handle_call({remove_food, Pos}, _From, #state{food=Food, subs=Subs}=State) ->
+handle_call({remove_food, Pos}, _From, #state{food=Food}=State0) ->
     case dict:is_key(Pos, Food) of
         true ->
-            do_publish(#evt_food_remove{pos=Pos}, Subs),
-            {reply, ok, State#state{food=dict:erase(Pos, Food)}};
+            State1 = do_publish(#evt_food_remove{pos=Pos}, State0),
+            {reply, ok, State1#state{food=dict:erase(Pos, Food)}};
         false ->
-            {reply, error, State}
+            {reply, error, State0}
     end.
 
 handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
@@ -238,32 +238,25 @@ handle_cast({unsubscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
     Subs1 = lists:keydelete(Pid, 1, Subs0),
     {noreply, State#state{subs=Subs1}};
 
-handle_cast({publish, Event}, #state{subs=Subs}=State) ->
-    do_publish(Event, Subs),
-    {noreply, State};
+handle_cast({publish, Event}, State) ->
+    {noreply, do_publish(Event, State)};
 
-handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures, subs=Subs, log=Log}=State) ->
-    do_publish(#evt_creature_add{cid=Cid, pos=Pos}, Subs),
-    Event = #evt_creature_add{cid=Cid, pos=Pos},
-    Log1 = [Event | Log],
+handle_cast({add_creature, Cid, Pos}, #state{creatures=Creatures}=State0) ->
+    State1 = do_publish(#evt_creature_add{cid=Cid, pos=Pos}, State0),
     Creature = #creature{cid=Cid, pos=Pos},
-    {noreply, State#state{creatures=[{Cid, Creature}|Creatures], log=Log1}};
+    {noreply, State1#state{creatures=[{Cid, Creature}|Creatures]}};
 
-handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0, subs=Subs, log=Log}=State) ->
-    do_publish(#evt_creature_move{cid=Cid, pos=Pos}, Subs),
+handle_cast({move_creature, Cid, Pos}, #state{creatures=Creatures0}=State0) ->
+    State1 = do_publish(#evt_creature_move{cid=Cid, pos=Pos}, State0),
     {_, Creature0} = lists:keyfind(Cid, 1, Creatures0),
     Creature1 = Creature0#creature{pos=Pos},
     Creatures1 = lists:keyreplace(Cid, 1, Creatures0, {Cid, Creature1}),
-    Event = #evt_creature_move{cid=Cid, pos=Pos},
-    Log1 = [Event | Log], 
-    {noreply, State#state{creatures=Creatures1, log=Log1}};
+    {noreply, State1#state{creatures=Creatures1}};
 
-handle_cast({remove_creature, Cid}, #state{creatures=Creatures0, subs=Subs, log=Log}=State) ->
-    do_publish(#evt_creature_remove{cid=Cid}, Subs),
+handle_cast({remove_creature, Cid}, #state{creatures=Creatures0}=State0) ->
+    State1 = do_publish(#evt_creature_remove{cid=Cid}, State0),
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
-    Event = #evt_creature_remove{cid=Cid},
-    Log1 = [Event | Log],
-    {noreply, State#state{creatures=Creatures1, log=Log1}}.
+    {noreply, State1#state{creatures=Creatures1}}.
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -278,12 +271,13 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% @doc Publish an event to all the chunk's subscribers.
 %% @private
-do_publish(Event, Subs) ->
+do_publish(Event, #state{log=Log, subs=Subs}=State) ->
     lists:foreach(
       fun({Pid, _}) ->
               Pid ! {event, Event}
       end,
-      Subs).
+      Subs),
+    State#state{log=artifice_event_log:add(Event, Log)}.
 
 %% @doc Gets the id of the creature at the given position, or false.
 %% @private
@@ -320,7 +314,10 @@ registered_name_test() ->
     ?assertEqual('artifice_chunk_0_-1', registered_name({0,-1})).
 
 do_publish_test() ->
-    do_publish(some_event, [{self(), #sub{pid=self()}}]),
+    do_publish(some_event,
+               #state{
+                 subs=[{self(), #sub{pid=self()}}],
+                 log=artifice_event_log:new()}),
     receive X -> ?assertEqual({event, some_event}, X) end.
 
 find_creature_by_pos_test() ->
