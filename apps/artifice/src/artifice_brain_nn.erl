@@ -43,7 +43,11 @@ crossover(Brain1, Brain2) ->
     unpack_brain(<<Left/binary, Right/binary>>).
 
 mutate(Brain) ->
-    Brain. % derp
+    BrainCode = pack_brain(Brain),
+    %% Pick a random byte and complement it.
+    N = random:uniform(size(BrainCode)-1)-1,
+    <<Left:N/bytes, V, Right/binary>> = BrainCode,
+    unpack_brain(<<Left/binary, bnot V, Right/binary>>).
 
 react(Brain, Percept) ->
     {pid, Pid} = lists:keyfind(pid, 1, Percept),
