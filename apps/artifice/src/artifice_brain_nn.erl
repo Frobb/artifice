@@ -21,26 +21,26 @@
 -define(FLOAT_BITS, 32). % Default IEEE 754 single precision float
 
 -record(nn, {
-          hidden_weights :: [[float()]],
-          output_weights :: [[float()]]
+          hidden :: [[float()]],
+          output :: [[float()]]
          }).
 
 %%% artifice_brain callbacks ---------------------------------------------------
 
 random() ->
     random:seed(erlang:now()),
-    HW = random_layer(?HIDDEN_COUNT, ?INPUT_COUNT),
-    OW = random_layer(?OUTPUT_COUNT, ?HIDDEN_COUNT),
-    #nn{hidden_weights=HW,
-        output_weights=OW}.
+    Hidden = random_layer(?HIDDEN_COUNT, ?INPUT_COUNT),
+    Output = random_layer(?OUTPUT_COUNT, ?HIDDEN_COUNT),
+    #nn{hidden=Hidden,
+        output=Output}.
 
 crossover(Brain1, Brain2) ->
     Brain1Code = pack_brain(Brain1),
     Brain2Code = pack_brain(Brain2),
-    SplitPt = random:unform(size(Brain1Code)-1),
-    <<Left:SplitPt/bytes, _Rest/binary>> = Brain1Code,
-    <<_Rest:SplitPt/bytes, Right/binary>> = Brain2Code,
-    pack_brain(<<Left/binary, Right/binary>>).
+    SplitPt = random:uniform(size(Brain1Code)-1),
+    <<Left:SplitPt/bytes, _/binary>> = Brain1Code,
+    <<_:SplitPt/bytes, Right/binary>> = Brain2Code,
+    unpack_brain(<<Left/binary, Right/binary>>).
 
 mutate(Brain) ->
     Brain. % derp
@@ -75,9 +75,9 @@ react(Brain, Percept) ->
 
 %%% Internal -------------------------------------------------------------------
 
-activate_network(Inputs, #nn{hidden_weights=HW, output_weights=OW}) ->
-    HOut = activate_layer(Inputs, HW),
-    activate_layer(HOut, OW).
+activate_network(Inputs, #nn{hidden=Hidden, output=Output}) ->
+    HOut = activate_layer(Inputs, Hidden),
+    activate_layer(HOut, Output).
 
 activate_layer(Inputs, Weights) ->
     [activate_neuron(Inputs, W) || W <- Weights].
@@ -99,8 +99,8 @@ random_neuron(NumWeights) ->
 random_weight() ->
     (random:uniform()-0.5) * 10.0. % TODO twiddle for glory
 
-pack_brain(#nn{hidden_weights=HW, output_weights=OW}) ->
-    <<(pack_layer(HW))/binary, (pack_layer(OW))/binary>>.
+pack_brain(#nn{hidden=Hidden, output=Output}) ->
+    <<(pack_layer(Hidden))/binary, (pack_layer(Output))/binary>>.
 
 pack_layer(Neurons) ->
     << <<(pack_floats(Weights))/binary>> || Weights <- Neurons >>.
@@ -112,6 +112,20 @@ actually_pack_floats([F|Fs], Acc) ->
     actually_pack_floats(Fs, <<Acc/binary, F:?FLOAT_BITS/float>>);
 actually_pack_floats([], Acc) ->
     Acc.
+
+unpack_brain(Buffer) ->
+    {Hidden, Rest} = unpack_layer(Buffer, ?HIDDEN_COUNT, ?INPUT_COUNT),
+    {Output, <<>>} = unpack_layer(Rest, ?OUTPUT_COUNT, ?HIDDEN_COUNT),
+    #nn{hidden=Hidden, output=Output}.
+
+unpack_layer(Buffer, NumNodes, WeightsPerNode) ->
+    actually_unpack_layer(Buffer, NumNodes, WeightsPerNode, []).
+
+actually_unpack_layer(Buffer, 0, _WeightsPerNode, Acc) ->
+    {lists:reverse(Acc), Buffer};
+actually_unpack_layer(Buffer, NumNodes, WeightsPerNode, Acc) ->
+    {Node, Rest} = unpack_floats(WeightsPerNode, Buffer),
+    actually_unpack_layer(Rest, NumNodes-1, WeightsPerNode, [Node|Acc]).
 
 unpack_floats(N, Buf) ->
     actually_unpack_floats(N, Buf, []).
