@@ -104,8 +104,8 @@ socket.onmessage = function(evt) {
 
 // GameJS setup ----------------------------------------------------------------
 
-var MAP_WIDTH = 640;
-var MAP_HEIGHT = 480;
+var MAP_WIDTH = 1280;
+var MAP_HEIGHT = 640;
 var TILE_SIZE = 32; //px
 
 var creatures = {};
@@ -118,7 +118,11 @@ var moveMult = 1.0;
 
 setAddMode('creature');
 
-gamejs.preload(['../sprites/grass.png']);
+gamejs.preload(['../sprites/grass.png',
+                '../sprites/food-default.png',
+                '../sprites/food-carcass.png',
+                '../sprites/creature.png',
+               ]);
 
 gamejs.ready(function() {
     var display = gamejs.display.setMode([MAP_WIDTH, MAP_HEIGHT]);
@@ -149,7 +153,7 @@ gamejs.ready(function() {
         }
     });
 
-    var grass = gamejs.image.load('../sprites/grass.png');
+    var grassTile = gamejs.image.load('../sprites/grass.png');
     gamejs.onTick(function(msDuration) {
         drawDebug();
         sendMove(Math.floor(camera.x), Math.floor(camera.y));
@@ -164,7 +168,7 @@ gamejs.ready(function() {
             for (var y = -1; y <= MAP_HEIGHT/TILE_SIZE; y++) {
                 var r = new gamejs.Rect((x+xfrac)*TILE_SIZE, (y+yfrac)*TILE_SIZE,
                                         TILE_SIZE, TILE_SIZE);
-                display.blit(grass, r);
+                display.blit(grassTile, r);
             }
         }
 
@@ -174,7 +178,7 @@ gamejs.ready(function() {
             var rect = new gamejs.Rect((f.pos.x-camera.x)*TILE_SIZE,
                                        (f.pos.y-camera.y)*TILE_SIZE,
                                        TILE_SIZE, TILE_SIZE);
-            gamejs.draw.rect(display, "rgb(0,0,255)", rect);
+            f.draw(display, rect);
         }
 
         // Draw all creatures
@@ -184,7 +188,7 @@ gamejs.ready(function() {
             var rect = new gamejs.Rect((c.pos.x-camera.x)*TILE_SIZE,
                                        (c.pos.y-camera.y)*TILE_SIZE,
                                        TILE_SIZE, TILE_SIZE);
-            gamejs.draw.rect(display, "rgb(255,0,0)", rect);                                       
+            c.draw(display, rect);
         }
     });
 
