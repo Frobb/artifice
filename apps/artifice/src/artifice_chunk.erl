@@ -298,9 +298,7 @@ spawn_initial_food(State) ->
 
 spawn_initial_food(State, 0) -> State;
 spawn_initial_food(#state{chunk={CX, CY}}=State0, Amount) ->
-    X = random:uniform(?CHUNK_WIDTH),
-    Y = random:uniform(?CHUNK_HEIGHT),
-    State1 = actually_spawn_food(State0, {CX * ?CHUNK_WIDTH + X, CY * ?CHUNK_HEIGHT + Y}, undefined),
+    State1 = actually_spawn_food(State0, generate_random_pos({CX, CY}), undefined),
     spawn_initial_food(State1, Amount-1).
 
 %% @doc Publish an event to all the chunk's subscribers.
