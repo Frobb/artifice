@@ -134,7 +134,7 @@ handle_cast(mate, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
         error ->
             {noreply, State}
     end;
-    
+
 handle_cast(fight, #state{cid=MyCid, pos=Pos}=State) ->
     case find_first_other(MyCid, artifice_chunk:creatures_at(Pos)) of
         {ok, EnemyCid} ->
@@ -191,11 +191,11 @@ handle_event(#evt_creature_add{cid=Cid, pos=Pos},
              #state{known_creatures=Creatures}=State) ->
     State#state{known_creatures=[{Cid, #creature{cid=Cid, pos=Pos}}|Creatures]};
 handle_event(#evt_creature_move{cid=Cid, pos=Pos},
-            #state{known_creatures=Creatures0}=State) ->
+             #state{known_creatures=Creatures0}=State) ->
     Creatures1 = lists:keyreplace(Cid, 1, Creatures0, #creature{cid=Cid, pos=Pos}),
     State#state{known_creatures=Creatures1};
 handle_event(#evt_creature_remove{cid=Cid},
-            #state{known_creatures=Creatures}=State) ->
+             #state{known_creatures=Creatures}=State) ->
     State#state{known_creatures=lists:keydelete(Cid, 1, Creatures)};
 handle_event(#evt_food_add{pos=Pos, type=Type}, #state{known_food=Food}=State) ->
     State#state{known_food=[#food{pos=Pos, type=Type}|Food]};
