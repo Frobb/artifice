@@ -99,7 +99,7 @@ registered_name({X, Y}) ->
 %% @doc Publish an event to all subscribers.
 publish(Chunk, Event) ->
     cast_ensure_started(Chunk, {publish, Event}).
-  
+
 %% @doc Subscribe the current process to events from a chunk.
 subscribe(Chunk) ->
     cast_ensure_started(Chunk, {subscribe, self()}).
@@ -107,7 +107,7 @@ subscribe(Chunk) ->
 %% @doc Unsubscribe the current process from events from a chunk.
 unsubscribe(Chunk) ->
     cast_ensure_started(Chunk, {unsubscribe, self()}).
-   
+
 %% @doc Update subscriptions for the calling process based
 %% on the old and new coordinates. Should be called after
 %% moving yourself (creatures) or the camera (clients).
@@ -146,11 +146,11 @@ adjacent_chunks({X, Y}) ->
 %% @doc Add a creature to the given chunk.
 add_creature(Chunk, Cid, Pos) ->
     cast_ensure_started(Chunk, {add_creature, Cid, Pos}).
-   
+
 %% @doc Move a creature within the given chunk.
 move_creature(Chunk, Cid, Pos) ->
     cast_ensure_started(Chunk, {move_creature, Cid, Pos}).
-   
+
 %% @doc Remove a creature from the given chunk.
 remove_creature(Chunk, Cid) ->
     cast_ensure_started(Chunk, {remove_creature, Cid}).
@@ -163,7 +163,7 @@ creatures_at(Pos) ->
 %% @doc Get the event log for the given chunk.
 event_log(Chunk) ->
     call_ensure_started(Chunk, event_log).
-  
+
 %% @doc Add food at the specified position.
 %% Returns ok if there was no food there already, otherwise error.
 add_food(Pos, Type) ->
@@ -179,17 +179,17 @@ remove_food(Pos) ->
 %% @doc Calls chunk with the given message, starting it as needed.
 %% @private
 cast_ensure_started(Chunk, Message) ->
-	ok = ensure_started(Chunk),
-	Name = registered_name(Chunk),
-	gen_server:cast(Name, Message).	
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:cast(Name, Message).	
 
 %% @doc Casts to chunk with the given message, starting it as needed.
 %% @private
 call_ensure_started(Chunk, Message) ->
-	ok = ensure_started(Chunk),
-	Name = registered_name(Chunk),
-	gen_server:call(Name, Message).
-  
+    ok = ensure_started(Chunk),
+    Name = registered_name(Chunk),
+    gen_server:call(Name, Message).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
@@ -280,14 +280,14 @@ generate_random_pos({CX, CY}) ->
     {CX * ?CHUNK_WIDTH + X, CY * ?CHUNK_HEIGHT + Y}.
 
 actually_spawn_food(#state{food=Food0}=State0, Pos, Type) ->
-     case dict:is_key(Pos, Food0) of
-	 false ->
-	     State1 = do_publish(#evt_food_add{pos=Pos, type=Type}, State0),
-	     Food1 = dict:store(Pos, #food{pos=Pos, type=Type}, Food0),
-	     State1#state{food=Food1};
-	 true ->
-	     State0
-     end.
+    case dict:is_key(Pos, Food0) of
+        false ->
+            State1 = do_publish(#evt_food_add{pos=Pos, type=Type}, State0),
+            Food1 = dict:store(Pos, #food{pos=Pos, type=Type}, Food0),
+            State1#state{food=Food1};
+        true ->
+            State0
+    end.
 
 spawn_initial_food(State) ->
     Amount = artifice_config:initial_food(),
