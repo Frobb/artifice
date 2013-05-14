@@ -26,4 +26,4 @@ print() ->
 
 %% @doc Start up the creature registry
 init() ->
-    ets:new(?MODULE, [set, public, named_table, write_concurrency]).
+    ets:new(?MODULE, [set, public, named_table, {write_concurrency, true}]).

@@ -196,9 +196,12 @@ remove_food(Pos) ->
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
+    FoodInterval = artifice_config:random_food(),
+    timer:send_interval(FoodInterval, {random_add_food, Chunk, noodles}), 
     lager:info("Chunk (~w,~w) online.", [X, Y]),
     State = #state{chunk=Chunk, food=dict:new(), log=artifice_event_log:new()},
-    {ok, State}.
+    State1 = spawn_initial_food(State),
+    {ok, State1}.
 
 handle_call({creatures_at, Pos}, _From, #state{creatures=Creatures}=State) ->
     {reply, find_creatures_by_pos(Creatures, Pos), State};
@@ -259,6 +262,10 @@ handle_cast({remove_creature, Cid}, #state{creatures=Creatures0}=State0) ->
     Creatures1 = lists:keydelete(Cid, 1, Creatures0),
     {noreply, State1#state{creatures=Creatures1}}.
 
+handle_info({random_add_food, Chunk, Type}, State) ->
+    Pos = generate_random_pos(Chunk),
+    {noreply, actually_spawn_food(State, Pos, Type)};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -269,6 +276,32 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%% Internal -------------------------------------------------------------------
+
+generate_random_pos({CX, CY}) ->
+    X = random:uniform(?CHUNK_WIDTH), 
+    Y = random:uniform(?CHUNK_HEIGHT),
+    {CX * ?CHUNK_WIDTH + X, CY * ?CHUNK_HEIGHT + Y}.
+
+actually_spawn_food(#state{food=Food0}=State0, Pos, Type) ->
+     case dict:is_key(Pos, Food0) of
+	 false ->
+	     State1 = do_publish(#evt_food_add{pos=Pos, type=Type}, State0),
+	     Food1 = dict:store(Pos, #food{pos=Pos, type=Type}, Food0),
+	     State1#state{food=Food1};
+	 true ->
+	     State0
+     end.
+
+spawn_initial_food(State) ->
+    Amount = artifice_config:initial_food(),
+    spawn_initial_food(State, Amount).
+
+spawn_initial_food(State, 0) -> State;
+spawn_initial_food(#state{chunk={CX, CY}}=State0, Amount) ->
+    X = random:uniform(?CHUNK_WIDTH),
+    Y = random:uniform(?CHUNK_HEIGHT),
+    State1 = actually_spawn_food(State0, {CX * ?CHUNK_WIDTH + X, CY * ?CHUNK_HEIGHT + Y}, undefined),
+    spawn_initial_food(State1, Amount-1).
 
 %% @doc Publish an event to all the chunk's subscribers.
 %% @private
