@@ -14,7 +14,7 @@
 %% Network node count parameters. Refers to the input,
 %% hidden and output layers respectively.
 -define(INPUT_COUNT,  8).
--define(OUTPUT_COUNT, 6).
+-define(OUTPUT_COUNT, 7).
 -define(HIDDEN_COUNT, 2).
 -define(WEIGHT_COUNT, ?HIDDEN_COUNT * (?INPUT_COUNT + ?OUTPUT_COUNT)).
 
@@ -59,7 +59,7 @@ react(Brain, Percept) ->
     {food, Food} = lists:keyfind(food, 1, Percept),
     {CX, CY} = vector_to_nearest(Pos, [C#creature.pos || C <- Creatures]),
     {FX, FY} = vector_to_nearest(Pos, [F#food.pos || F <- Food]),
-    [N, S, W, E, Eat, Mate] = activate_network([Energy,
+    [N, S, W, E, Eat, Mate, Fight] = activate_network([Energy,
                                                 X, Y,
                                                 CX, CY,
                                                 FX, FY,
@@ -75,6 +75,7 @@ react(Brain, Percept) ->
     end,
     %% Eating
     if
+ 		?ACTIVE(Fight)  -> artifice_creature:fight(Pid);   
         ?ACTIVE(Eat)  -> artifice_creature:eat(Pid);
         ?ACTIVE(Mate) -> artifice_creature:mate(Pid);
         true     -> ok
