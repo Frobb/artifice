@@ -98,19 +98,16 @@ registered_name({X, Y}) ->
 
 %% @doc Publish an event to all subscribers.
 publish(Chunk, Event) ->
-    ok = ensure_started(Chunk),
-    gen_server:cast(registered_name(Chunk), {publish, Event}).
-
+    cast_ensure_started(Chunk, {publish, Event}).
+  
 %% @doc Subscribe the current process to events from a chunk.
 subscribe(Chunk) ->
-    ok = ensure_started(Chunk),
-    gen_server:cast(registered_name(Chunk), {subscribe, self()}).
+    cast_ensure_started(Chunk, {subscribe, self()}).
 
 %% @doc Unsubscribe the current process from events from a chunk.
 unsubscribe(Chunk) ->
-    ok = ensure_started(Chunk),
-    gen_server:cast(registered_name(Chunk), {unsubscribe, self()}).
-
+    cast_ensure_started(Chunk, {unsubscribe, self()}).
+   
 %% @doc Update subscriptions for the calling process based
 %% on the old and new coordinates. Should be called after
 %% moving yourself (creatures) or the camera (clients).
@@ -148,51 +145,51 @@ adjacent_chunks({X, Y}) ->
 
 %% @doc Add a creature to the given chunk.
 add_creature(Chunk, Cid, Pos) ->
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:cast(Name, {add_creature, Cid, Pos}).
-
+    cast_ensure_started(Chunk, {add_creature, Cid, Pos}).
+   
 %% @doc Move a creature within the given chunk.
 move_creature(Chunk, Cid, Pos) ->
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:cast(Name, {move_creature, Cid, Pos}).
-
+    cast_ensure_started(Chunk, {move_creature, Cid, Pos}).
+   
 %% @doc Remove a creature from the given chunk.
 remove_creature(Chunk, Cid) ->
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:cast(Name, {remove_creature, Cid}).
+    cast_ensure_started(Chunk, {remove_creature, Cid}).
 
 %% @doc Get the ids of the creatures at the given position.
 creatures_at(Pos) ->
     Chunk = chunk_at(Pos),
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:call(Name, {creatures_at, Pos}).
+    call_ensure_started(Chunk, {creatures_at, Pos}).
 
 %% @doc Get the event log for the given chunk.
 event_log(Chunk) ->
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:call(Name, event_log).
-
+    call_ensure_started(Chunk, event_log).
+  
 %% @doc Add food at the specified position.
 %% Returns ok if there was no food there already, otherwise error.
 add_food(Pos, Type) ->
     Chunk = chunk_at(Pos),
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:call(Name, {add_food, Pos, Type}).
+    call_ensure_started(Chunk, {add_food, Pos, Type}).
 
 %% @doc Remove food at the specified position, if any.
 %% Returns ok if food was successfully removed, otherwise error.
 remove_food(Pos) ->
     Chunk = chunk_at(Pos),
-    ok = ensure_started(Chunk),
-    Name = registered_name(Chunk),
-    gen_server:call(Name, {remove_food, Pos}).
+    call_ensure_started(Chunk, {remove_food, Pos}).
 
+%% @doc Calls chunk with the given message, starting it as needed.
+%% @private
+cast_ensure_started(Chunk, Message) ->
+	ok = ensure_started(Chunk),
+	Name = registered_name(Chunk),
+	gen_server:cast(Name, Message).	
+
+%% @doc Casts to chunk with the given message, starting it as needed.
+%% @private
+call_ensure_started(Chunk, Message) ->
+	ok = ensure_started(Chunk),
+	Name = registered_name(Chunk),
+	gen_server:call(Name, Message).
+  
 %%% gen_server callbacks -------------------------------------------------------
 
 init([{X,Y}=Chunk]) ->
