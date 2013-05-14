@@ -14,7 +14,8 @@ unregister(Cid) ->
 
 %% @doc Look up pid associated with Cid
 whereis(Cid) ->
-    ets:lookup(?MODULE, Cid).
+    [{Cid, Pid}] = ets:lookup(?MODULE, Cid),
+    Pid.
 
 %% @doc Start up the creature registry
 init() ->

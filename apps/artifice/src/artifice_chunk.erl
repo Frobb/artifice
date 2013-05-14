@@ -15,7 +15,7 @@
 -export([add_creature/3]).
 -export([move_creature/3]).
 -export([remove_creature/2]).
--export([creature_at/2]).
+-export([creatures_at/1]).
 
 -export([publish/2]).
 -export([subscribe/1]).
@@ -164,11 +164,12 @@ remove_creature(Chunk, Cid) ->
     Name = registered_name(Chunk),
     gen_server:cast(Name, {remove_creature, Cid}).
 
-%% @doc Get the id of the creature at the given position, or false.
-creature_at(Chunk, Pos) ->
+%% @doc Get the ids of the creatures at the given position.
+creatures_at(Pos) ->
+    Chunk = chunk_at(Pos),
     ok = ensure_started(Chunk),
     Name = registered_name(Chunk),
-    gen_server:call(Name, {creature_at, Pos}).
+    gen_server:call(Name, {creatures_at, Pos}).
 
 %% @doc Get the event log for the given chunk.
 event_log(Chunk) ->
@@ -199,8 +200,8 @@ init([{X,Y}=Chunk]) ->
     State = #state{chunk=Chunk, food=dict:new(), log=artifice_event_log:new()},
     {ok, State}.
 
-handle_call({creature_at, Pos}, _From, #state{creatures=Creatures}=State) ->
-    {reply, find_creature_by_pos(Creatures, Pos), State};
+handle_call({creatures_at, Pos}, _From, #state{creatures=Creatures}=State) ->
+    {reply, find_creatures_by_pos(Creatures, Pos), State};
 
 handle_call(event_log, _From, #state{log=Log}=State) ->
     {reply, artifice_event_log:to_list(Log), State};
@@ -279,14 +280,14 @@ do_publish(Event, #state{log=Log, subs=Subs}=State) ->
       Subs),
     State#state{log=artifice_event_log:add(Event, Log)}.
 
-%% @doc Gets the id of the creature at the given position, or false.
+%% @doc Gets the ids of the creatures at the given position.
 %% @private
-find_creature_by_pos([{Cid, #creature{pos=Pos}}|_Creatures], Pos) ->
-    {ok, Cid};
-find_creature_by_pos([_Creature|Creatures], Pos) -> 
-    find_creature_by_pos(Creatures, Pos);
-find_creature_by_pos([], _Pos) -> 
-    false.
+find_creatures_by_pos([{Cid, #creature{pos=Pos}}|Creatures], Pos) ->
+    [Cid|find_creatures_by_pos(Creatures, Pos)];
+find_creatures_by_pos([_Creature|Creatures], Pos) -> 
+    find_creatures_by_pos(Creatures, Pos);
+find_creatures_by_pos([], _Pos) ->
+    [].
 
 %% @doc Compute the floor of a number (think "Math.floor").
 %% @private
@@ -320,11 +321,11 @@ do_publish_test() ->
                  log=artifice_event_log:new()}),
     receive X -> ?assertEqual({event, some_event}, X) end.
 
-find_creature_by_pos_test() ->
+find_creatures_by_pos_test() ->
     ?assertMatch({ok, _Pid}, start_link({0,0})),
     Cid = <<"mycid1">>,
-    ?assertEqual(false, creature_at({0,0}, {0,0})),
+    ?assertEqual([], creatures_at({0,0})),
     add_creature({0,0}, Cid, {0,0}),
-    ?assertEqual({ok, Cid}, creature_at({0,0}, {0,0})).
+    ?assertEqual([Cid], creatures_at({0,0})).
 
 -endif.

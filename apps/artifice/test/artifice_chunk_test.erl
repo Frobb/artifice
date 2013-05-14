@@ -39,18 +39,14 @@ main_test_() ->
                end},
               {"Initially a cell has no creatures",
                fun() ->
-                       ?assertEqual(false, artifice_chunk:creature_at(
-                                             ?CHUNK, {0, 0})
-                                   )
+                       ?assertEqual([], artifice_chunk:creatures_at({0, 0}))
                end},
               {"Added creature is found at position",
                fun() ->
                        ?assertEqual(ok, artifice_chunk:add_creature(
                                           ?CHUNK, ?CID, {0, 0})
                                    ),
-                       ?assertEqual({ok, ?CID}, artifice_chunk:creature_at(
-                                                  ?CHUNK, {0, 0})
-                                   )
+                       ?assertEqual([?CID], artifice_chunk:creatures_at({0, 0}))
                end},
 	      {"Getting the event log",
 	       fun() ->
@@ -63,21 +59,15 @@ main_test_() ->
                        ?assertEqual(ok, artifice_chunk:move_creature(
                                           ?CHUNK, ?CID, {0, 1})
                                    ),
-                       ?assertEqual(false, artifice_chunk:creature_at(
-                                             ?CHUNK, {0, 0})
-                                   ),
-                       ?assertEqual({ok, ?CID}, artifice_chunk:creature_at(
-                                                  ?CHUNK, {0, 1})
-                                   )
+                       ?assertEqual([], artifice_chunk:creatures_at({0, 0})),
+                       ?assertEqual([?CID], artifice_chunk:creatures_at({0, 1}))
                end},
               {"Removing a creature updates cells",
                fun() ->
                        ?assertEqual(ok, artifice_chunk:remove_creature(
                                           ?CHUNK, ?CID)
                                    ),
-                       ?assertEqual(false, artifice_chunk:creature_at(
-                                             ?CHUNK, {0, 1})
-                                   )
+                       ?assertEqual([], artifice_chunk:creatures_at({0, 1}))
                end}
              ]
      end}.

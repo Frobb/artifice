@@ -14,11 +14,13 @@
 %% Network node count parameters. Refers to the input,
 %% hidden and output layers respectively.
 -define(INPUT_COUNT,  8).
--define(OUTPUT_COUNT, 5).
+-define(OUTPUT_COUNT, 6).
 -define(HIDDEN_COUNT, 2).
 -define(WEIGHT_COUNT, ?HIDDEN_COUNT * (?INPUT_COUNT + ?OUTPUT_COUNT)).
 
 -define(FLOAT_BITS, 32). % Default IEEE 754 single precision float
+
+-define(ACTIVE(Signal), Signal >= 1).
 
 -record(nn, {
           hidden :: [[float()]],
@@ -57,23 +59,24 @@ react(Brain, Percept) ->
     {food, Food} = lists:keyfind(food, 1, Percept),
     {CX, CY} = vector_to_nearest(Pos, [C#creature.pos || C <- Creatures]),
     {FX, FY} = vector_to_nearest(Pos, [F#food.pos || F <- Food]),
-    [N, S, W, E, Eat] = activate_network([Energy,
-                                          X, Y,
-                                          CX, CY,
-                                          FX, FY,
-                                          length(Creatures)],
-                                         Brain),
+    [N, S, W, E, Eat, Mate] = activate_network([Energy,
+                                                X, Y,
+                                                CX, CY,
+                                                FX, FY,
+                                                length(Creatures)],
+                                               Brain),
     %% Movement
     if
-        N >= 1 -> artifice_creature:move(Pid, north);
-        S >= 1 -> artifice_creature:move(Pid, south);
-        W >= 1 -> artifice_creature:move(Pid, west);
-        E >= 1 -> artifice_creature:move(Pid, east);
+        ?ACTIVE(N) -> artifice_creature:move(Pid, north);
+        ?ACTIVE(S) -> artifice_creature:move(Pid, south);
+        ?ACTIVE(W) -> artifice_creature:move(Pid, west);
+        ?ACTIVE(E) -> artifice_creature:move(Pid, east);
         true   -> ok
     end,
     %% Eating
     if
-        Eat >= 1 -> artifice_creature:eat(Pid);
+        ?ACTIVE(Eat)  -> artifice_creature:eat(Pid);
+        ?ACTIVE(Mate) -> artifice_creature:mate(Pid);
         true     -> ok
     end.
 
@@ -92,7 +95,12 @@ activate_neuron(Inputs, Weights) ->
 actually_activate_neuron([I|Is], [W|Ws], Sum) ->
     actually_activate_neuron(Is, Ws, W*I + Sum);
 actually_activate_neuron([], [], Sum) ->
-    Sum.
+    apply_threshold(Sum).
+
+apply_threshold(Sum) ->
+    if Sum >= 1 -> 1;
+       true     -> -1
+    end.
 
 random_layer(NumNeurons, NumInputs) ->
     [random_neuron(NumInputs) || _ <- lists:seq(1, NumNeurons)].

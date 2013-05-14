@@ -2,12 +2,14 @@
 -behaviour(gen_server).
 
 %%% API
--export([start_link/2]).
--export([start_supervised/2]).
--export([child_spec/2]).
+-export([start_link/3]).
+-export([start_supervised/2, start_supervised/3]).
+-export([child_spec/3]).
+-export([get_brain/1]).
 -export([new_cid/0]).
 -export([move/2]).
 -export([eat/1]).
+-export([mate/1]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -36,16 +38,20 @@
 %%% API ------------------------------------------------------------------------
 
 %% @doc Start a new creature process.
-start_link(Cid, Pos) ->
-    gen_server:start_link(?MODULE, [Cid, Pos], []).
+start_link(Cid, Pos, Brain) ->
+    gen_server:start_link(?MODULE, [Cid, Pos, Brain], []).
+
+%% @doc Start a creature process in the creature's supervisor tree.
+start_supervised(Cid, Pos) ->
+    start_supervised(Cid, Pos, ?BRAIN:random()).
 
 %% @doc Start a creature process in the creature supervisor's tree.
-start_supervised(Cid, Pos) ->
-    artifice_creature_sup:start_child(child_spec(Cid, Pos)).
+start_supervised(Cid, Pos, Brain) ->
+    artifice_creature_sup:start_child(child_spec(Cid, Pos, Brain)).
 
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
-child_spec(Cid, Pos) ->
-    StartFunc = {?MODULE, start_link, [Cid, Pos]},
+child_spec(Cid, Pos, Brain) ->
+    StartFunc = {?MODULE, start_link, [Cid, Pos, Brain]},
     Restart = transient,
     Shutdown = brutal_kill,
     Type = worker,
@@ -64,19 +70,27 @@ move(Pid, Dir) ->
 eat(Pid) ->
     gen_server:cast(Pid, eat).
 
+%% @doc Mate with the first creature at the current position (except self).
+mate(Pid) ->
+    gen_server:cast(Pid, mate).
+
+%% @doc Get the brain of the given creature.
+get_brain(Pid) ->
+    gen_server:call(Pid, get_brain).
+
 %%% gen_server callbacks -------------------------------------------------------
 
-init([Cid, Pos]) ->
+init([Cid, Pos, Brain]) ->
     State = #state{cid=Cid,
                    pos=Pos,
-                   brain=?BRAIN:random(),
+                   brain=Brain,
                    energy=artifice_config:initial_energy()},
     add_to_initial_chunk(State),
     reset_timer(),
     {ok, State}.
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(get_brain, _From, #state{brain=Brain}=State) ->
+    {reply, Brain, State}.
 
 handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
     State1 = case Dir of
@@ -94,6 +108,19 @@ handle_cast(eat, #state{cid=Cid, pos=Pos, energy=Energy0}=State) ->
             Energy1 = min(artifice_config:initial_energy(),
                           Energy0 + artifice_config:food_energy()),
             {noreply, State#state{energy=Energy1}};
+        error ->
+            {noreply, State}
+    end;
+
+handle_cast(mate, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
+    case find_first_other(MyCid, artifice_chunk:creatures_at(Pos)) of
+        {ok, MateCid} ->
+            MatePid = artifice_creature_registry:whereis(MateCid),
+            MateBrain = get_brain(MatePid),
+            OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
+            start_supervised(new_cid(), Pos, OffspringBrain),
+            lager:info("Creature '~s' mated with '~s'.", [MyCid, MateCid]),
+            {noreply, State}; % TODO energy drain
         error ->
             {noreply, State}
     end.
@@ -209,3 +236,12 @@ make_percept(#state{energy=Energy,
      {pos, Pos},
      {creatures, [C || {_, C} <- Creatures]},
      {food, Food}].
+
+%% @doc Find the first cid that doesn't match the given cid, or error.
+%% @private
+find_first_other(MyCid, [MyCid|Cids]) ->
+    find_first_other(MyCid, Cids);
+find_first_other(_MyCid, [Cid|_Cids]) ->
+    {ok, Cid};
+find_first_other(_MyCid, []) ->
+    error.
