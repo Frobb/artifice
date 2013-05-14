@@ -73,12 +73,12 @@ react(Brain, Percept) ->
         ?ACTIVE(E) -> artifice_creature:move(Pid, east);
         true   -> ok
     end,
-    %% Eating
+    %% Mating, eating and fighting
     if
- 		?ACTIVE(Fight)  -> artifice_creature:fight(Pid);   
-        ?ACTIVE(Eat)  -> artifice_creature:eat(Pid);
-        ?ACTIVE(Mate) -> artifice_creature:mate(Pid);
-        true     -> ok
+        ?ACTIVE(Mate)  -> artifice_creature:mate(Pid);
+        ?ACTIVE(Eat)   -> artifice_creature:eat(Pid);
+        ?ACTIVE(Fight) -> artifice_creature:fight(Pid);   
+        true           -> ok
     end.
 
 %%% Internal -------------------------------------------------------------------

@@ -135,25 +135,16 @@ handle_cast(mate, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
             {noreply, State}
     end;
     
-handle_cast(fight, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
+handle_cast(fight, #state{cid=MyCid, pos=Pos}=State) ->
     case find_first_other(MyCid, artifice_chunk:creatures_at(Pos)) of
         {ok, EnemyCid} ->
             EnemyPid = artifice_creature_registry:whereis(EnemyCid),
-            EnemyBrain = get_brain(EnemyPid),
-            
             case random:uniform(2) of
-            		1 -> drain_energy(self(), artifice_config:energy_cost(mate));
-            		2 -> drain_energy(enemyPid, artifice_config:energy_cost(mate))
-            		end,
-            %% Byt mot nån fight algoritm
-            %%OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
-            %%
-            
-            %drain_energy(self(), artifice_config:energy_cost(mate)), %% måste byta från mate till inställd fight kostnad
-            %drain_energy(enemyPid, artifice_config:energy_cost(mate)),
-            %%start_supervised(new_cid(), Pos, OffspringBrain),
+                1 -> drain_energy(self(), artifice_config:energy_cost(fight));
+                2 -> drain_energy(EnemyPid, artifice_config:energy_cost(fight))
+            end,
             lager:info("Creature '~s' fought with '~s'.", [MyCid, EnemyCid]),
-            {noreply, State}; % TODO energy drain
+            {noreply, State};
         error ->
             {noreply, State}
     end;
