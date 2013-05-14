@@ -10,6 +10,7 @@
 -export([move/2]).
 -export([eat/1]).
 -export([mate/1]).
+-export([drain_energy/2]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -78,6 +79,9 @@ mate(Pid) ->
 get_brain(Pid) ->
     gen_server:call(Pid, get_brain).
 
+drain_energy(Pid, Amount) ->
+    gen_server:cast(Pid, {drain_energy, Amount}).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([Cid, Pos, Brain]) ->
@@ -118,29 +122,34 @@ handle_cast(mate, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
             MatePid = artifice_creature_registry:whereis(MateCid),
             MateBrain = get_brain(MatePid),
             OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
+            drain_energy(self(), artifice_config:energy_cost(mate)),
+            drain_energy(MatePid, artifice_config:energy_cost(mate)),
             start_supervised(new_cid(), Pos, OffspringBrain),
             lager:info("Creature '~s' mated with '~s'.", [MyCid, MateCid]),
             {noreply, State}; % TODO energy drain
         error ->
             {noreply, State}
-    end.
+    end;
 
-handle_info(?THINK_MESSAGE, State0) ->
-    State1 = drain_energy(State0, energy_cost(ambient)),
+handle_cast({drain_energy, Amount}, #state{energy=Energy}=State) ->
+    {noreply, State#state{energy=Energy - Amount}}.
+
+handle_info(?THINK_MESSAGE, State) ->
+    drain_energy(self(), artifice_config:energy_cost(ambient)),
     %% Did we die?
-    case State1#state.energy >= 0 of
+    case State#state.energy >= 0 of
         true ->
-            ?BRAIN:react(State1#state.brain, make_percept(State1)),
+            ?BRAIN:react(State#state.brain, make_percept(State)),
             reset_timer(),
-            {noreply, State1};
+            {noreply, State};
         false ->
-            Chunk = artifice_chunk:chunk_at(State1#state.pos),
+            Chunk = artifice_chunk:chunk_at(State#state.pos),
             artifice_chunk:publish(Chunk, #evt_creature_die{
-                                     cid=State1#state.cid
+                                     cid=State#state.cid
                                     }),
-            artifice_chunk:add_food(State1#state.pos, carcass),
-            lager:debug("Creature ~s died.", [State1#state.cid]),
-            {stop, normal, State1}
+            artifice_chunk:add_food(State#state.pos, carcass),
+            lager:debug("Creature ~s died.", [State#state.cid]),
+            {stop, normal, State}
     end;
 handle_info({event, Event}, State0) ->
     State1 = handle_event(Event, State0),
@@ -196,10 +205,10 @@ add_to_initial_chunk(State) ->
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
 %% @private
-actually_move(NewPos, State0) ->
-    State1 = drain_energy(State0, energy_cost(move)),
-    Cid = State1#state.cid,
-    OldPos = State1#state.pos,
+actually_move(NewPos, State) ->
+    drain_energy(self(), artifice_config:energy_cost(move)),
+    Cid = State#state.cid,
+    OldPos = State#state.pos,
     NewChunk = artifice_chunk:chunk_at(NewPos),
     OldChunk = artifice_chunk:chunk_at(OldPos),
     case NewChunk == OldChunk of
@@ -211,20 +220,7 @@ actually_move(NewPos, State0) ->
     end,
     artifice_chunk:update_subscriptions(OldPos, NewPos),
     artifice_creature_registry:update_pos(Cid, NewPos),
-    State1#state{pos=NewPos}.
-
-%% @doc Apply ambient energy loss to the creature.
-%% @private
-drain_energy(#state{energy=Energy0}=State, Amount) ->
-    Energy1 = Energy0 - Amount,
-    State#state{energy=Energy1}.
-
-%% @doc Get the energy cost for an action.
-%% @private
-energy_cost(Action) ->
-    Costs = artifice_config:energy_costs(),
-    {_, Cost} = lists:keyfind(Action, 1, Costs),
-    Cost.
+    State#state{pos=NewPos}.
 
 %% @doc Build a percept for the brain from the information known right now.
 %% @private

@@ -3,7 +3,7 @@
 %%% API
 -export([simulation_rate/0, simulation_rate/1]).
 -export([initial_energy/0, initial_energy/1]).
--export([energy_costs/0, energy_costs/1]).
+-export([energy_cost/1, energy_cost/2]).
 -export([food_energy/0, food_energy/1]).
 
 -define(APP, artifice).
@@ -27,11 +27,13 @@ initial_energy(InitialEnergy) ->
     set_env(initial_energy, InitialEnergy).
 
 %% @doc Get the per-tick energy loss rate for creatures.
-energy_costs() ->
-    get_env(energy_costs).
+energy_cost(Action) ->
+    {Action, Value} = lists:keyfind(Action, 1, get_env(energy_costs)),
+    Value.
 
-%% @doc Set the per-tick energy loss rate for creatures.
-energy_costs(Costs) ->
+%% @doc Set the energy cost for a particular action.
+energy_cost(Action, Value) ->
+    Costs = lists:keyreplace(Action, 1, get_env(energy_costs), {Action, Value}),
     set_env(energy_costs, Costs).
 
 %% @doc Get the amount of energy gained from eating food.
