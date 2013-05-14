@@ -191,7 +191,7 @@ add_to_initial_chunk(State) ->
     Chunk = artifice_chunk:chunk_at(State#state.pos),
     artifice_chunk:add_creature(Chunk, State#state.cid, State#state.pos),
     artifice_chunk:subscribe_initial(State#state.pos),
-    artifice_creature_registry:register(State#state.cid, self()),
+    artifice_creature_registry:register(State#state.cid, self(), State#state.pos),
     ok.
 
 %% @doc Move to a new position, updating the chunks' creature lists as needed.
@@ -210,6 +210,7 @@ actually_move(NewPos, State0) ->
             artifice_chunk:move_creature(NewChunk, Cid, NewPos)
     end,
     artifice_chunk:update_subscriptions(OldPos, NewPos),
+    artifice_creature_registry:update_pos(Cid, NewPos),
     State1#state{pos=NewPos}.
 
 %% @doc Apply ambient energy loss to the creature.
