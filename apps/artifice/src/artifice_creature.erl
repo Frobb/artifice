@@ -271,7 +271,7 @@ perform_wrapping_move({NewX, NewY}, #state{pos=OldPos}=State) ->
                   true -> NewX
                end,
     WrappedY = if NewY < MinY -> MaxY;
-                  NewX > MaxY -> MinY;
+                  NewY > MaxY -> MinY;
                   true -> NewY
                end,
     perform_normal_move({WrappedX, WrappedY}, State).
