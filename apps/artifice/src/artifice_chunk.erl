@@ -53,9 +53,6 @@
           chunk
          }).
 
--define(CHUNK_WIDTH, 128).
--define(CHUNK_HEIGHT, 128).
-
 %%% API ------------------------------------------------------------------------
 
 %% @doc Start a chunk server for the given chunk reference.

@@ -54,7 +54,7 @@ start_supervised(Cid, Pos, Brain) ->
 %% @doc Generate a child spec for starting a chunk server from a supervisor.
 child_spec(Cid, Pos, Brain) ->
     StartFunc = {?MODULE, start_link, [Cid, Pos, Brain]},
-    Restart = transient,
+    Restart = temporary,
     Shutdown = brutal_kill,
     Type = worker,
     Modules = [?MODULE],
@@ -102,10 +102,10 @@ handle_call(get_brain, _From, #state{brain=Brain}=State) ->
 
 handle_cast({move, Dir}, #state{pos={X, Y}}=State0) ->
     State1 = case Dir of
-                 north -> actually_move({X, Y-1}, State0);
-                 south -> actually_move({X, Y+1}, State0);
-                 east  -> actually_move({X+1, Y}, State0);
-                 west  -> actually_move({X-1, Y}, State0)
+                 north -> attempt_move({X, Y-1}, State0);
+                 south -> attempt_move({X, Y+1}, State0);
+                 east  -> attempt_move({X+1, Y}, State0);
+                 west  -> attempt_move({X-1, Y}, State0)
              end,
     {noreply, State1};
 
@@ -221,10 +221,31 @@ add_to_initial_chunk(State) ->
     artifice_creature_registry:register(State#state.cid, self(), State#state.pos),
     ok.
 
-%% @doc Move to a new position, updating the chunks' creature lists as needed.
+%% @doc Attempt to move to a new position, updating the
+%% chunks' creature lists as needed.
 %% @private
-actually_move(NewPos, State) ->
+attempt_move(NewPos, State) ->
+    case validate_move(NewPos, State) of
+        true  -> perform_move(NewPos, State);
+        false -> State
+    end.
+
+%% @doc Return true if the requested move is valid and can be performed.
+%% @private
+validate_move(_NewPos, _State) ->
+    true. % All moves are OK for now.
+
+%% @doc Actually perform a move. Assumes it's valid.
+%% @private
+perform_move(NewPos, State) ->
     drain_energy(self(), artifice_config:energy_cost(move)),
+    case artifice_config:wrap_spawn_chunk() of
+        true  -> perform_wrapping_move(NewPos, State);
+        false -> perform_normal_move(NewPos, State)
+    end.
+
+%% @doc Perform a normal, unrestricted move.
+perform_normal_move(NewPos, State) ->
     Cid = State#state.cid,
     OldPos = State#state.pos,
     NewChunk = artifice_chunk:chunk_at(NewPos),
@@ -239,6 +260,21 @@ actually_move(NewPos, State) ->
     artifice_chunk:update_subscriptions(OldPos, NewPos),
     artifice_creature_registry:update_pos(Cid, NewPos),
     State#state{pos=NewPos}.
+
+%% @doc Perform a move wrapped around the borders of the current chunk.
+perform_wrapping_move({NewX, NewY}, #state{pos=OldPos}=State) ->
+    {CX, CY} = artifice_chunk:chunk_at(OldPos),
+    {MinX, MinY} = {CX*?CHUNK_WIDTH, CY*?CHUNK_HEIGHT},
+    {MaxX, MaxY} = {(CX+1)*?CHUNK_WIDTH-1, (CY+1)*?CHUNK_HEIGHT-1},
+    WrappedX = if NewX < MinX -> MaxX;
+                  NewX > MaxX -> MinX;
+                  true -> NewX
+               end,
+    WrappedY = if NewY < MinY -> MaxY;
+                  NewX > MaxY -> MinY;
+                  true -> NewY
+               end,
+    perform_normal_move({WrappedX, WrappedY}, State).
 
 %% @doc Build a percept for the brain from the information known right now.
 %% @private

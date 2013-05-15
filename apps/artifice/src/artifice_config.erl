@@ -7,6 +7,7 @@
 -export([food_energy/0, food_energy/1]).
 -export([initial_food/0, initial_food/1]).
 -export([random_food/0, random_food/1]).
+-export([wrap_spawn_chunk/0, wrap_spawn_chunk/1]).
 
 -define(APP, artifice).
 
@@ -61,6 +62,16 @@ random_food() ->
 %% @doc Set the rate of randomly spawned food. 
 random_food(SetTimer) ->
     set_env(spawn_food_rate, SetTimer).
+
+%% @doc Get if creatures' movement shall be wrapped around
+%% chunk they spawned in.
+wrap_spawn_chunk() ->
+    get_env(wrap_spawn_chunk).
+
+%% @doc Set if creatures' movement shall be wrapped around
+%% chunk they spawned in.
+wrap_spawn_chunk(Wrap) ->
+    set_env(wrap_spawn_chunk, Wrap).
 
 %%% Internal -------------------------------------------------------------------
 
