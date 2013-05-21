@@ -175,6 +175,8 @@ gamejs.ready(function() {
         // Draw all food
         for (var i in foods) {
             var f = foods[i];
+            if (!visible(camera, f.pos))
+                continue;
             var rect = new gamejs.Rect((f.pos.x-camera.x)*TILE_SIZE,
                                        (f.pos.y-camera.y)*TILE_SIZE,
                                        TILE_SIZE, TILE_SIZE);
@@ -182,9 +184,10 @@ gamejs.ready(function() {
         }
 
         // Draw all creatures
-        // TODO: Ignore off-screen creatures!
         for (var cid in creatures) {
             var c = creatures[cid];
+            if (!visible(camera, c.pos))
+                continue;
             var rect = new gamejs.Rect((c.pos.x-camera.x)*TILE_SIZE,
                                        (c.pos.y-camera.y)*TILE_SIZE,
                                        TILE_SIZE, TILE_SIZE);
@@ -203,6 +206,13 @@ gamejs.ready(function() {
 });
 
 // Support functions -----------------------------------------------------------
+
+function visible(cameraPos, objPos) {
+    return (objPos.x >= cameraPos.x &&
+            objPos.y >= cameraPos.y &&
+            (objPos.x < cameraPos.x + MAP_WIDTH) &&
+            (objPos.y < cameraPos.y + MAP_HEIGHT));
+}
 
 function writeConsole(category, text) {
     var elem = $('<li class="' + category + '" />');

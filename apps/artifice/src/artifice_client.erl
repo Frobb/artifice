@@ -21,7 +21,7 @@ init({tcp, http}, _Req, _Opts) ->
  
 websocket_init(_TransportName, Req, _Opts) ->
     Pos = {0, 0},
-    artifice_chunk:subscribe_initial(Pos),
+    artifice_chunk:subscribe_initial(Pos, true),
     {ok, Req, #state{pos=Pos}}.
  
 websocket_handle({text, Msg}, Req, State0) ->
@@ -46,7 +46,7 @@ websocket_terminate(_Reason, _Req, State) ->
 handle(<<"move">>, Payload, State) ->
     {_, X} = lists:keyfind(<<"x">>, 1, Payload),
     {_, Y} = lists:keyfind(<<"y">>, 1, Payload),
-    artifice_chunk:update_subscriptions(State#state.pos, {X, Y}),
+    artifice_chunk:update_subscriptions(State#state.pos, {X, Y}, true),
     {ok, State#state{pos={X, Y}}};
 
 handle(<<"creature_add">>, Payload, State) ->

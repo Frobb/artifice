@@ -1,29 +1,45 @@
 -module(artifice_creature_registry).
 
--export([register/3, unregister/1, whereis/1, update_pos/2, print/0, init/0]).
+-export([register/4]).
+-export([unregister/1]).
+-export([whereis/1]).
+-export([update_pos/2]).
+-export([pos_of/1]).
+-export([brain_of/1]).
+
+-export([print/0]).
+-export([init/0]).
 
 %%% API -------------------------------------------------------------------------
 
-%% @doc Register a new creature
-register(Cid, Pid, Pos) ->
-    ets:insert(?MODULE, {Cid, Pid, Pos}).
+%% @doc Register a new creature.
+register(Cid, Pid, Pos, Brain) ->
+    ets:insert(?MODULE, {Cid, Pid, Pos, Brain}).
 
-%% @doc Unregister a terminated creature
+%% @doc Unregister a terminated creature.
 unregister(Cid) ->
     ets:delete(?MODULE, Cid).
 
-%% @doc Look up pid associated with Cid
+%% @doc Look up pid associated with Cid.
 whereis(Cid) ->
     ets:lookup_element(?MODULE, Cid, 2).
 
-%% @doc Update creature position
+%% @doc Update creature position.
 update_pos(Cid, NewPos) ->
     ets:update_element(?MODULE, Cid, {3, NewPos}).
 
-%% @doc Print the contents of the registry
+%% @doc Get the position of the specified creature.
+pos_of(Cid) ->
+    ets:lookup_element(?MODULE, Cid, 3).
+
+%% @doc Get the brain of the specified creature.
+brain_of(Cid) ->
+    ets:lookup_element(?MODULE, Cid, 4).
+
+%% @doc Print the contents of the registry.
 print() ->
     ets:tab2list(?MODULE).
 
-%% @doc Start up the creature registry
+%% @doc Start up the creature registry.
 init() ->
     ets:new(?MODULE, [set, public, named_table, {write_concurrency, true}]).

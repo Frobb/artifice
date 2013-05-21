@@ -5,7 +5,6 @@
 -export([start_link/3]).
 -export([start_supervised/2, start_supervised/3]).
 -export([child_spec/3]).
--export([get_brain/1]).
 -export([new_cid/0]).
 -export([move/2]).
 -export([eat/1]).
@@ -30,7 +29,8 @@
           brain :: artifice_brain:brain(),
           energy :: non_neg_integer(),
           known_creatures = [] :: [{binary(), #creature{}}],
-          known_food = [] :: [#food{}]
+          known_food = [] :: [#food{}],
+          last_mating :: erlang:timestamp()
          }).
 
 -define(THINK_HZ, 1).
@@ -72,17 +72,16 @@ move(Pid, Dir) ->
 eat(Pid) ->
     gen_server:cast(Pid, eat).
 
-%% @doc Mate with the first creature at the current position (except self).
+%% @doc Request to mate with the first creature at
+%% the current position (except self).
 mate(Pid) ->
     gen_server:cast(Pid, mate).
 
+%% @doc Fight with the first creature at the current position (except self).
 fight(Pid) ->
     gen_server:cast(Pid, fight).
 
-%% @doc Get the brain of the given creature.
-get_brain(Pid) ->
-    gen_server:call(Pid, get_brain).
-
+%% @doc Drain the specified amount of energy from the given creature.
 drain_energy(Pid, Amount) ->
     gen_server:cast(Pid, {drain_energy, Amount}).
 
@@ -92,7 +91,8 @@ init([Cid, Pos, Brain]) ->
     State = #state{cid=Cid,
                    pos=Pos,
                    brain=Brain,
-                   energy=artifice_config:initial_energy()},
+                   energy=artifice_config:initial_energy(),
+                   last_mating=erlang:now()},
     add_to_initial_chunk(State),
     reset_timer(),
     {ok, State}.
@@ -113,27 +113,28 @@ handle_cast(eat, #state{cid=Cid, pos=Pos, energy=Energy0}=State) ->
     case artifice_chunk:remove_food(Pos) of
         ok ->
             lager:debug("Creature '~s' ate some food.", [Cid]),
-            Energy1 = min(artifice_config:initial_energy(),
+            Energy1 = min(artifice_config:max_energy(),
                           Energy0 + artifice_config:food_energy()),
             {noreply, State#state{energy=Energy1}};
         error ->
             {noreply, State}
     end;
 
-handle_cast(mate, #state{cid=MyCid, pos=Pos, brain=MyBrain}=State) ->
+handle_cast(mate, #state{cid=MyCid, pos=Pos}=State) ->
     case find_first_other(MyCid, artifice_chunk:creatures_at(Pos)) of
         {ok, MateCid} ->
-            MatePid = artifice_creature_registry:whereis(MateCid),
-            MateBrain = get_brain(MatePid),
-            OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
-            drain_energy(self(), artifice_config:energy_cost(mate)),
-            drain_energy(MatePid, artifice_config:energy_cost(mate)),
-            start_supervised(new_cid(), Pos, OffspringBrain),
-            lager:info("Creature '~s' mated with '~s'.", [MyCid, MateCid]),
-            {noreply, State}; % TODO energy drain
-        error ->
-            {noreply, State}
-    end;
+            case can_mate(State) of
+                true ->
+                    request_mate(
+                      artifice_creature_registry:whereis(MateCid),
+                      MyCid);
+                false ->
+                    ok
+            end;
+        error -> 
+            ok
+    end,
+    {noreply, State};
 
 handle_cast(fight, #state{cid=MyCid, pos=Pos}=State) ->
     case find_first_other(MyCid, artifice_chunk:creatures_at(Pos)) of
@@ -150,7 +151,28 @@ handle_cast(fight, #state{cid=MyCid, pos=Pos}=State) ->
     end;
 
 handle_cast({drain_energy, Amount}, #state{energy=Energy}=State) ->
-    {noreply, State#state{energy=Energy - Amount}}.
+    {noreply, State#state{energy=Energy - Amount}};
+
+handle_cast({request_mate, MateCid}, #state{cid=MyCid}=State) ->
+    case can_mate(State) of
+        true ->
+            acknowledge_mate(artifice_creature_registry:whereis(MateCid), MyCid),
+            drain_energy(self(), artifice_config:energy_cost(mate)),
+            {noreply, State#state{last_mating=now()}};
+        false ->
+            {noreply, State}
+    end;
+
+handle_cast({acknowledge_mate, MateCid},
+            #state{brain=MyBrain,
+                   pos=Pos,
+                   cid=MyCid}=State) ->
+    drain_energy(self(), artifice_config:energy_cost(mate)),
+    MateBrain = artifice_creature_registry:brain_of(MateCid),
+    OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
+    start_supervised(new_cid(), Pos, OffspringBrain),
+    lager:info("Creature '~s' mated with '~s'.", [MyCid, MateCid]),
+    {noreply, State#state{last_mating=now()}}.
 
 handle_info(?THINK_MESSAGE, State) ->
     drain_energy(self(), artifice_config:energy_cost(ambient)),
@@ -207,6 +229,15 @@ handle_event(_Event, State) ->
 
 %%% Internal -------------------------------------------------------------------
 
+%% @doc Request that the given creature mate with us.
+request_mate(Pid, MyCid) ->
+    gen_server:cast(Pid, {request_mate, MyCid}).
+
+%% @doc Acknowledge a previous mating request.
+acknowledge_mate(Pid, MyCid) ->
+    gen_server:cast(Pid, {acknowledge_mate, MyCid}).
+
+%% @doc Set the think timer to trigger one think period from now.
 reset_timer() ->
     Time = 1000 div (?THINK_HZ * artifice_config:simulation_rate()),
     {ok, _TRef} = timer:send_after(Time, ?THINK_MESSAGE),
@@ -217,8 +248,11 @@ reset_timer() ->
 add_to_initial_chunk(State) ->
     Chunk = artifice_chunk:chunk_at(State#state.pos),
     artifice_chunk:add_creature(Chunk, State#state.cid, State#state.pos),
-    artifice_chunk:subscribe_initial(State#state.pos),
-    artifice_creature_registry:register(State#state.cid, self(), State#state.pos),
+    artifice_chunk:subscribe_initial(State#state.pos, false),
+    artifice_creature_registry:register(State#state.cid,
+                                        self(),
+                                        State#state.pos,
+                                        State#state.brain),
     ok.
 
 %% @doc Attempt to move to a new position, updating the
@@ -257,7 +291,7 @@ perform_normal_move(NewPos, State) ->
         true ->
             artifice_chunk:move_creature(NewChunk, Cid, NewPos)
     end,
-    artifice_chunk:update_subscriptions(OldPos, NewPos),
+    artifice_chunk:update_subscriptions(OldPos, NewPos, false),
     artifice_creature_registry:update_pos(Cid, NewPos),
     State#state{pos=NewPos}.
 
@@ -296,3 +330,11 @@ find_first_other(_MyCid, [Cid|_Cids]) ->
     {ok, Cid};
 find_first_other(_MyCid, []) ->
     error.
+
+%% @doc Return true if mating is possible right now.
+can_mate(#state{last_mating=LastMate}) ->
+    seconds_between(LastMate, now()) >= artifice_config:mating_cooldown().
+
+%% @doc Return the time in seconds from T1 to T2.
+seconds_between(T1, T2) ->
+    timer:now_diff(T2, T1) div 1000000 * artifice_config:simulation_rate(). % us

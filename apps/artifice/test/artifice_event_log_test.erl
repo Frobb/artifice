@@ -25,9 +25,9 @@ add_test_() ->
      {"Adding an event increases length and affects list form",
       fun() ->
               Log0 = artifice_event_log:new(),
-              Log1 = artifice_event_log:add(#evt_creature_add{}, Log0),
+              Log1 = artifice_event_log:add(#evt_food_add{}, Log0),
               ?assertEqual(1, artifice_event_log:length(Log1)),
-              ?assertEqual([#evt_creature_add{}],
+              ?assertEqual([#evt_food_add{}],
                            artifice_event_log:to_list(Log1))
       end}
     ].

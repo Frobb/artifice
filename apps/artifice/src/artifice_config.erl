@@ -8,6 +8,8 @@
 -export([initial_food/0, initial_food/1]).
 -export([random_food/0, random_food/1]).
 -export([wrap_spawn_chunk/0, wrap_spawn_chunk/1]).
+-export([mating_cooldown/0, mating_cooldown/1]).
+-export([max_energy/0, max_energy/1]).
 
 -define(APP, artifice).
 
@@ -28,6 +30,14 @@ initial_energy() ->
 %% @doc Set the initial energy available to newly spawned creatures.
 initial_energy(InitialEnergy) ->
     set_env(initial_energy, InitialEnergy).
+
+%% @doc Get the maximum energy level for creatures.
+max_energy() ->
+    get_env(max_energy).
+
+%% @doc Set the maximum energy level for creatures.
+max_energy(MaxEnergy) ->
+    set_env(max_energy, MaxEnergy).
 
 %% @doc Get the per-tick energy loss rate for creatures.
 energy_cost(Action) ->
@@ -72,6 +82,14 @@ wrap_spawn_chunk() ->
 %% chunk they spawned in.
 wrap_spawn_chunk(Wrap) ->
     set_env(wrap_spawn_chunk, Wrap).
+
+%% @doc Get the cooldown time between mating in seconds.
+mating_cooldown() ->
+    get_env(mating_cooldown).
+
+%% @doc Set the cooldown time between mating in seconds.
+mating_cooldown(Cooldown) ->
+    set_env(mating_cooldown, Cooldown).
 
 %%% Internal -------------------------------------------------------------------
 

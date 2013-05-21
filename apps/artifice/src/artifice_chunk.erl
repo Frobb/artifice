@@ -18,10 +18,10 @@
 -export([creatures_at/1]).
 
 -export([publish/2]).
--export([subscribe/1]).
+-export([subscribe/1, subscribe/2]).
 -export([unsubscribe/1]).
--export([subscribe_initial/1]).
--export([update_subscriptions/2]).
+-export([subscribe_initial/2]).
+-export([update_subscriptions/3]).
 -export([unsubscribe_final/1]).
 
 -export([add_food/2]).
@@ -99,7 +99,12 @@ publish(Chunk, Event) ->
 
 %% @doc Subscribe the current process to events from a chunk.
 subscribe(Chunk) ->
-    cast_ensure_started(Chunk, {subscribe, self()}).
+    subscribe(Chunk, false).
+
+%% @doc Subscribe the current process to events from a chunk,
+%% possibly sending the log of previous events upon subscription.
+subscribe(Chunk, SendLog) ->
+    cast_ensure_started(Chunk, {subscribe, self(), SendLog}).
 
 %% @doc Unsubscribe the current process from events from a chunk.
 unsubscribe(Chunk) ->
@@ -108,16 +113,24 @@ unsubscribe(Chunk) ->
 %% @doc Update subscriptions for the calling process based
 %% on the old and new coordinates. Should be called after
 %% moving yourself (creatures) or the camera (clients).
-update_subscriptions(OldPos, NewPos) ->
+update_subscriptions(OldPos, NewPos, SendLog) ->
     OldAdj = adjacent_chunks(chunk_at(OldPos)),
     NewAdj = adjacent_chunks(chunk_at(NewPos)),
-    lists:foreach(fun artifice_chunk:subscribe/1,   NewAdj -- OldAdj),
+    lists:foreach(
+      fun(Chunk) ->
+              subscribe(Chunk, SendLog)
+      end,
+      NewAdj -- OldAdj),
     lists:foreach(fun artifice_chunk:unsubscribe/1, OldAdj -- NewAdj).
 
 %% @doc Set up initial chunk subscriptions for the current process.
 %% Should be called by a creature or client upon startup.
-subscribe_initial(Pos) ->
-    lists:foreach(fun subscribe/1, adjacent_chunks(chunk_at(Pos))).
+subscribe_initial(Pos, SendLog) ->
+    lists:foreach(
+      fun(Chunk) ->
+              subscribe(Chunk, SendLog)
+      end,
+      adjacent_chunks(chunk_at(Pos))).
 
 %% @doc Unsubscribes the current process from all chunks in its vicinity.
 %% Should be called when a creature or client exits.
@@ -222,11 +235,20 @@ handle_call({remove_food, Pos}, _From, #state{food=Food}=State0) ->
             {reply, error, State0}
     end.
 
-handle_cast({subscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
+handle_cast({subscribe, Pid, SendLog},
+            #state{chunk=Chunk, subs=Subs0, log=Log}=State) ->
     lager:debug("Process ~p subscribed to chunk ~p.", [Pid, Chunk]),
     Ref = erlang:monitor(process, Pid),
     Sub = {Pid, #sub{pid=Pid, ref=Ref}},
     Subs1 = [Sub|Subs0],
+    %% Depending on the subscriber we may want to send the log of previous
+    %% events upon subscription.
+    case SendLog of
+        true ->
+            artifice_event_log:send_to(Pid, Log);
+        false ->
+            ok
+    end,
     {noreply, State#state{subs=Subs1}};
 
 handle_cast({unsubscribe, Pid}, #state{chunk=Chunk, subs=Subs0}=State) ->
@@ -345,12 +367,5 @@ do_publish_test() ->
                  subs=[{self(), #sub{pid=self()}}],
                  log=artifice_event_log:new()}),
     receive X -> ?assertEqual({event, some_event}, X) end.
-
-find_creatures_by_pos_test() ->
-    ?assertMatch({ok, _Pid}, start_link({0,0})),
-    Cid = <<"mycid1">>,
-    ?assertEqual([], creatures_at({0,0})),
-    add_creature({0,0}, Cid, {0,0}),
-    ?assertEqual([Cid], creatures_at({0,0})).
 
 -endif.
