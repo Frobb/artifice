@@ -169,7 +169,7 @@ handle_cast({acknowledge_mate, MateCid},
                    cid=MyCid}=State) ->
     drain_energy(self(), artifice_config:energy_cost(mate)),
     MateBrain = artifice_creature_registry:brain_of(MateCid),
-    OffspringBrain = ?BRAIN:crossover(MyBrain, MateBrain),
+    OffspringBrain = make_offspring_brain(MyBrain, MateBrain),
     start_supervised(new_cid(), Pos, OffspringBrain),
     lager:info("Creature '~s' mated with '~s'.", [MyCid, MateCid]),
     {noreply, State#state{last_mating=now()}}.
@@ -338,3 +338,18 @@ can_mate(#state{last_mating=LastMate}) ->
 %% @doc Return the time in seconds from T1 to T2.
 seconds_between(T1, T2) ->
     timer:now_diff(T2, T1) div 1000000 * artifice_config:simulation_rate(). % us
+
+%% @doc Combine two brains to form an offspring brain.
+%% @private
+make_offspring_brain(Brain1, Brain2) ->
+    Offspring = ?BRAIN:crossover(Brain1, Brain2),
+    maybe_mutate(Offspring).
+
+%% @doc Perform mutation or leave the brain unmolested based on fair dice roll.
+%% @private
+maybe_mutate(Brain) ->
+    case random:uniform() < artifice_config:mutation_rate() of
+        true  -> ?BRAIN:mutate(Brain);
+        false -> Brain
+    end.
+

@@ -10,6 +10,7 @@
 -export([wrap_spawn_chunk/0, wrap_spawn_chunk/1]).
 -export([mating_cooldown/0, mating_cooldown/1]).
 -export([max_energy/0, max_energy/1]).
+-export([mutation_rate/0, mutation_rate/1]).
 
 -define(APP, artifice).
 
@@ -90,6 +91,14 @@ mating_cooldown() ->
 %% @doc Set the cooldown time between mating in seconds.
 mating_cooldown(Cooldown) ->
     set_env(mating_cooldown, Cooldown).
+
+%% @doc Get the probability of mutation in conjunction with crossover.
+mutation_rate() ->
+    get_env(mutation_rate).
+
+%% @doc Get the probability of mutation in conjunction with crossover.
+mutation_rate(Wrap) ->
+    set_env(mutation_rate, Wrap).
 
 %%% Internal -------------------------------------------------------------------
 
