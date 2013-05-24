@@ -11,6 +11,7 @@
 -export([mate/1]).
 -export([fight/1]).
 -export([drain_energy/2]).
+-export([kill/1]).
 
 %%% gen_server callbacks
 -export([init/1]).
@@ -85,6 +86,10 @@ fight(Pid) ->
 drain_energy(Pid, Amount) ->
     gen_server:cast(Pid, {drain_energy, Amount}).
 
+%% @doc Kill the given creature.
+kill(Pid) ->
+    gen_server:cast(Pid, kill).
+
 %%% gen_server callbacks -------------------------------------------------------
 
 init([Cid, Pos, Brain]) ->
@@ -152,6 +157,9 @@ handle_cast(fight, #state{cid=MyCid, pos=Pos}=State) ->
 
 handle_cast({drain_energy, Amount}, #state{energy=Energy}=State) ->
     {noreply, State#state{energy=Energy - Amount}};
+
+handle_cast(kill, State) ->
+    {noreply, State#state{energy=0}};
 
 handle_cast({request_mate, MateCid}, #state{cid=MyCid}=State) ->
     case can_mate(State) of

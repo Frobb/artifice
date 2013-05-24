@@ -6,6 +6,7 @@
 -export([update_pos/2]).
 -export([pos_of/1]).
 -export([brain_of/1]).
+-export([decimate/0]).
 
 -export([print/0]).
 -export([init/0]).
@@ -43,3 +44,10 @@ print() ->
 %% @doc Start up the creature registry.
 init() ->
     ets:new(?MODULE, [set, public, named_table, {write_concurrency, true}]).
+
+%% @doc Kill every 10th creature.
+decimate() ->
+    Creatures = [Pid || {_, Pid, _, _} <- ets:tab2list(?MODULE)],
+    Candidates = lists:zip(Creatures, lists:seq(1, length(Creatures))),
+    lists:map(fun artifice_creature:kill/1,
+              [Pid || {Pid, N} <- Candidates, N rem 10 == 0]).
