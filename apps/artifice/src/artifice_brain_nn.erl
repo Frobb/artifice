@@ -15,7 +15,7 @@
 %% hidden and output layers respectively.
 -define(INPUT_COUNT,  8).
 -define(OUTPUT_COUNT, 7).
--define(HIDDEN_COUNT, 2).
+-define(HIDDEN_COUNT, 25).
 -define(WEIGHT_COUNT, ?HIDDEN_COUNT * (?INPUT_COUNT + ?OUTPUT_COUNT)).
 
 -define(FLOAT_BITS, 32). % Default IEEE 754 single precision float
