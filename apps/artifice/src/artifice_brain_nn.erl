@@ -48,8 +48,8 @@ mutate(Brain) ->
     BrainCode = pack_brain(Brain),
     %% Pick a random byte and complement it.
     N = random:uniform(size(BrainCode)-1)-1,
-    <<Left:N/bytes, V, Right/binary>> = BrainCode,
-    unpack_brain(<<Left/binary, bnot V, Right/binary>>).
+    <<Left:N/bytes, _, Right/binary>> = BrainCode,
+    unpack_brain(<<Left/binary, (random:uniform(255)), Right/binary>>).
 
 react(Brain, Percept) ->
     {pid, Pid} = lists:keyfind(pid, 1, Percept),
